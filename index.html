@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Breeze Easy for Kids</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<main id="app">
+
+    <!-- =====================================================
+         MAIN MENU SCREEN
+         ===================================================== -->
+
+    <section id="menu-screen" class="screen active-screen">
+
+        <!-- Sky Decorations -->
+        <div class="sky-background">
+            <div class="cloud cloud-1"></div>
+            <div class="cloud cloud-2"></div>
+            <div class="cloud cloud-3"></div>
+
+            <div class="mountains"></div>
+        </div>
+
+        <!-- Poof Character -->
+        <div id="poof-container">
+            <div class="poof-character">
+
+                <img class="poof-layer poof-tail" id="poof-tail" src="images/poof/poof-tail-1.png" alt="">
+
+                <img class="poof-layer poof-left-wing" src="images/poof/poof-left-wing.png" alt="">
+                <img class="poof-layer poof-right-wing" src="images/poof/poof-right-wing.png" alt="">
+
+                <img class="poof-layer poof-body" src="images/poof/poof-body.png" alt="">
+                <img class="poof-layer poof-head" src="images/poof/poof-head.png" alt="">
+
+                <img class="poof-layer poof-left-ear" src="images/poof/poof-left-ear.png" alt="">
+                <img class="poof-layer poof-right-ear" src="images/poof/poof-right-ear.png" alt="">
+
+                <img class="poof-layer poof-left-eye" id="poof-left-eye" src="images/poof/poof-left-eye-open.png" alt="">
+                <img class="poof-layer poof-right-eye" id="poof-right-eye" src="images/poof/poof-right-eye-open.png" alt="">
+
+                <img class="poof-layer poof-nose" src="images/poof/poof-nose.png" alt="">
+                <img class="poof-layer poof-mouth" src="images/poof/poof-mouth.png" alt="">
+                <img class="poof-layer poof-sparkle" src="images/poof/poof-sparkle.png" alt="">
+
+            </div>
+        </div>
+
+        <!-- =====================================================
+             ACTIVITY GRID
+             ===================================================== -->
+
+        <section class="activity-grid">
+
+            <button class="activity-card" data-activity="bubbles">
+                <img src="images/activities/bubbles3.png" alt="Bubbles">
+            </button>
+
+            <button class="activity-card" data-activity="racecar">
+                <img src="images/activities/racecar2.png" alt="Racecar">
+            </button>
+
+            <button class="activity-card" data-activity="dragon">
+                <img src="images/activities/dragonbreath2.png" alt="Dragon">
+            </button>
+
+            <button class="activity-card" data-activity="balloon">
+                <img src="images/activities/balloon3.png" alt="Balloon">
+            </button>
+
+        </section>
+
+    </section>
+
+    <!-- =====================================================
+         ACTIVITY SCREEN
+         ===================================================== -->
+
+    <section id="activity-screen" class="screen">
+
+        <!-- Back Button -->
+        <button id="back-button">
+            ← Back
+        </button>
+
+        <!-- Main Activity Area -->
+        <div id="activity-area">
+
+            <!-- Dynamic activity content loads here -->
+        </div>
+
+        <!-- =====================================================
+             VERTICAL BLOW METER
+             ===================================================== -->
+
+        <div id="blow-meter">
+
+            <div class="meter-dot"></div>
+            <div class="meter-dot"></div>
+            <div class="meter-dot"></div>
+            <div class="meter-dot"></div>
+            <div class="meter-dot"></div>
+
+        </div>
+
+        <!-- =====================================================
+             POOF DURING ACTIVITIES
+             ===================================================== -->
+
+        <div id="activity-poof">
+
+            <div class="poof-character poof-character-small">
+                <img class="poof-layer poof-tail animated-tail" src="images/poof/poof-tail-1.png" alt="">
+                <img class="poof-layer poof-left-wing" src="images/poof/poof-left-wing.png" alt="">
+                <img class="poof-layer poof-right-wing" src="images/poof/poof-right-wing.png" alt="">
+                <img class="poof-layer poof-body" src="images/poof/poof-body.png" alt="">
+                <img class="poof-layer poof-left-ear" src="images/poof/poof-left-ear.png" alt="">
+                <img class="poof-layer poof-right-ear" src="images/poof/poof-right-ear.png" alt="">
+                <img class="poof-layer poof-head" src="images/poof/poof-head.png" alt="">
+                <img class="poof-layer poof-left-eye animated-left-eye" src="images/poof/poof-left-eye-open.png" alt="">
+                <img class="poof-layer poof-right-eye animated-right-eye" src="images/poof/poof-right-eye-open.png" alt="">
+                <img class="poof-layer poof-mouth" src="images/poof/poof-mouth.png" alt="">
+                <img class="poof-layer poof-nose" src="images/poof/poof-nose.png" alt="">
+                <img class="poof-layer poof-sparkle" src="images/poof/poof-sparkle.png" alt="">
+            </div>
+
+        </div>
+
+        <!-- =====================================================
+             TEST BLOW BUTTON
+             DEVELOPMENT ONLY
+             ===================================================== -->
+
+        <button id="test-blow">
+            Test Blow
+        </button>
+
+    </section>
+
+    <!-- =====================================================
+         CELEBRATION SCREEN
+         ===================================================== -->
+
+    <section id="celebration-screen" class="screen">
+
+        <div id="celebration-content">
+
+            <h2 id="celebration-message">
+                You Did It!
+            </h2>
+
+            <div id="celebration-poof">
+
+                <div class="poof-character poof-character-large">
+                    <img class="poof-layer poof-tail animated-tail" src="images/poof/poof-tail-1.png" alt="">
+                    <img class="poof-layer poof-left-wing" src="images/poof/poof-left-wing.png" alt="">
+                    <img class="poof-layer poof-right-wing" src="images/poof/poof-right-wing.png" alt="">
+                    <img class="poof-layer poof-body" src="images/poof/poof-body.png" alt="">
+                    <img class="poof-layer poof-left-ear" src="images/poof/poof-left-ear.png" alt="">
+                    <img class="poof-layer poof-right-ear" src="images/poof/poof-right-ear.png" alt="">
+                    <img class="poof-layer poof-head" src="images/poof/poof-head.png" alt="">
+                    <img class="poof-layer poof-left-eye animated-left-eye" src="images/poof/poof-left-eye-open.png" alt="">
+                    <img class="poof-layer poof-right-eye animated-right-eye" src="images/poof/poof-right-eye-open.png" alt="">
+                    <img class="poof-layer poof-mouth" src="images/poof/poof-mouth.png" alt="">
+                    <img class="poof-layer poof-nose" src="images/poof/poof-nose.png" alt="">
+                    <img class="poof-layer poof-sparkle" src="images/poof/poof-sparkle.png" alt="">
+                </div>
+
+            </div>
+
+        </div>
+
+    </section>
+
+    <!-- Hidden Parent Settings Trigger -->
+    <button id="settings-trigger">
+        ☁️
+    </button>
+
+</main>
+
+<!-- =====================================================
+     PARENT SETTINGS MODAL
+     ===================================================== -->
+
+<div id="settings-modal">
+
+    <div class="settings-panel">
+
+        <h2>Parent Settings</h2>
+
+        <label>
+            <input
+                    type="checkbox"
+                    id="sound-toggle"
+                    checked
+            >
+            Sounds
+        </label>
+
+        <label>
+            <input
+                    type="checkbox"
+                    id="voice-toggle"
+                    checked
+            >
+            Voice
+        </label>
+
+        <label>
+            <input
+                    type="checkbox"
+                    id="motion-toggle"
+                    checked
+            >
+            Motion
+        </label>
+
+        <button id="close-settings">
+            Close
+        </button>
+
+    </div>
+
+</div>
+
+<!-- =====================================================
+     MAIN JAVASCRIPT
+     ===================================================== -->
+
+<script src="js/activities.js"></script>
+<script src="js/microphone.js"></script>
+<script src="js/poof.js"></script>
+<script src="js/app.js"></script>
+
+</body>
+</html>
