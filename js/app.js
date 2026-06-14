@@ -42,8 +42,19 @@ const celebrationMessage = document.getElementById("celebration-message"); // Ce
 
 let currentActivity = null;                                                // Tracks current activity
 let blowCount = 0;                                                         // Tracks completed blows
-let requiredBlows = 5;
-let celebrationSparkleTimer;
+let requiredBlows = 5;                                                     // Tracks needed blows
+let celebrationSparkleTimer;                                               // Tracks sparkle loop
+
+let racecarProgress = 0;                                                    // Small car movement during race
+let racecarVelocity = 0;                                                    // Current car speed
+let raceRoadOffset = 0;                                                     // Road scrolling amount
+let raceRoadSpeed = 0;                                                      // Road scrolling speed
+let racecarPhase = "idle";                                                  // idle, racing, finishing
+let racecarAnimationId = null;                                               // Tracks animation loop
+let racecarTireFrame = 0;                                                    // Tracks tire frame
+let raceFinishReady = false;                                                // Tracks when car is ready to cross finish
+let raceFinishProgress = 0;                                                // Tracks race progress for meter
+let raceFinishStartOffset = 0;                                              // Saves road position when finish appears
 
 /* =====================================================
    MESSAGE POOLS
@@ -55,6 +66,21 @@ const bubbleMessages = [
     "Wow!",
     "Keep blowing!",
     "Look at them go!"
+];
+
+const racecarMessages = [
+    "Go car go!",
+    "Vroom!",
+    "Keep blowing!",
+    "Almost there!",
+    "Fast car!"
+];
+
+const racecarCelebrationMessages = [
+    "You won the race!",
+    "Great driving!",
+    "Poof is proud of you!",
+    "Amazing race!"
 ];
 
 const celebrationMessages = [
@@ -141,6 +167,43 @@ function startBubbleActivity() {
 }
 
 /* =====================================================
+   START RACECAR ACTIVITY
+   ===================================================== */
+
+function startRacecarActivity() {
+    currentActivity = "racecar";                                           // Starts racecar activity
+    blowCount = 0;                                                         // Resets progress
+    requiredBlows = 5;                                                     // Sets race goal
+
+    racecarProgress = 0;
+    racecarVelocity = 0;
+    raceRoadOffset = 0;
+    raceRoadSpeed = 0;
+    racecarTireFrame = 0;                                                  // Resets tire animation
+    racecarPhase = "racing";
+    raceFinishReady = false;                                                    // Resets finish readiness
+    raceFinishProgress = 0;                                                     // Resets race meter progress
+
+    if (racecarAnimationId) {
+        cancelAnimationFrame(racecarAnimationId);                          // Stops old car animation loop
+        racecarAnimationId = null;                                         // Clears animation tracker
+    }
+
+    resetMeter();                                                          // Clears meter
+    showScreen(activityScreen);                                            // Opens activity screen
+
+    const activityPoof = document.getElementById("activity-poof");         // Gets activity Poof
+
+    if (activityPoof) {
+        activityPoof.classList.remove("poof-center-celebration");          // Resets Poof from celebration
+    }
+
+    loadRacecarActivity();                                                 // Loads fresh racecar world
+    speakMessage("Blow the racecar!");                                     // Audio instruction
+    startRacecarMotion();                                                      // Starts gentle road movement
+}
+
+/* =====================================================
    LOAD BUBBLE ACTIVITY
    ===================================================== */
 
@@ -156,6 +219,39 @@ function loadBubbleActivity() {
             <div id="bubble-wand">
                 <div class="wand-ring"></div>
                 <div class="wand-stick"></div>
+            </div>
+
+        </div>
+    `;
+}
+
+/* =====================================================
+   LOAD RACECAR ACTIVITY
+   ===================================================== */
+
+function loadRacecarActivity() {
+    activityArea.innerHTML = `
+        <div id="racecar-world">
+
+            <div id="racecar-road">
+                <div id="racecar-finish-line"></div>
+            
+                <div class="road-line road-line-one"></div>
+                <div class="road-line road-line-two"></div>
+                <div class="road-line road-line-three"></div>
+                <div class="road-line road-line-four"></div>
+            </div>
+
+            <div id="racecar">
+                <div class="racecar-tire tire-front-left"></div>
+                <div class="racecar-tire tire-front-right"></div>
+
+                <div id="racecar-body">
+                    <div id="racecar-window"></div>
+                </div>
+
+                <div class="racecar-tire tire-back-left"></div>
+                <div class="racecar-tire tire-back-right"></div>
             </div>
 
         </div>
@@ -263,6 +359,178 @@ function animateBubbleWand() {
 }
 
 /* =====================================================
+   RACECAR MOVEMENT
+   ===================================================== */
+
+function handleRacecarBlow(blowStrength = 45) {
+    if (racecarPhase !== "racing" && racecarPhase !== "finishing") return; // Allows race and finish
+
+    const pushStrength = Math.min(Math.max(blowStrength / 45, 0.8), 2.2);  // Converts blow strength
+
+    if (racecarPhase === "racing") {
+        raceFinishProgress += 1 * pushStrength;                            // Progress depends on blow strength
+
+        blowCount = Math.min(
+            Math.floor((raceFinishProgress / 5) * requiredBlows),
+            requiredBlows
+        );                                                                 // Meter fills based on race progress
+
+        updateMeter();                                                     // Updates meter
+
+        moveRacecar(blowStrength);                                         // Moves road and nudges car
+
+        if (raceFinishProgress >= 5 && !raceFinishReady) {
+            raceFinishReady = true;                                        // Finish is ready
+            racecarPhase = "finishing";                                    // Changes to final phase
+            blowCount = requiredBlows;                                     // Keeps meter full at finish
+            updateMeter();                                                 // Shows full meter
+            showRacecarFinishLine();                                       // Shows finish line
+        }
+    }
+
+    if (racecarPhase === "finishing") {
+        racecarVelocity += 1.35 * pushStrength;                            // Final blow carries car across
+        raceRoadSpeed += 3.2 * pushStrength;                               // Keeps road moving during finish
+        startRacecarMotion();                                              // Continues movement
+    }
+
+    createRacecarWindEffect();                                             // Adds wind puff
+
+    const message = getRandomMessage(racecarMessages);                     // Gets racecar message
+    speakMessage(message);                                                 // Speaks message
+}
+
+function moveRacecar(blowStrength = 45) {
+    const racecar = document.getElementById("racecar");                    // Gets racecar
+
+    if (!racecar) return;                                                  // Stops if missing
+
+    const pushStrength = Math.min(Math.max(blowStrength / 45, 0.8), 1.8);  // Converts blow strength
+
+    racecarVelocity += 0.18 * pushStrength;                                // Small car nudge
+    raceRoadSpeed += 3.4 * pushStrength;                                   // Main racing illusion
+
+    racecar.classList.remove("racecar-bounce");                           // Resets bounce
+    void racecar.offsetWidth;                                              // Restarts animation
+    racecar.classList.add("racecar-bounce");                              // Plays bounce
+
+    startRacecarMotion();                                                  // Starts motion loop
+}
+
+function startRacecarMotion() {
+    if (racecarAnimationId) return;                                        // Prevents duplicate loops
+
+    function animateCar() {
+        const racecar = document.getElementById("racecar");                // Gets car
+        const road = document.getElementById("racecar-road");              // Gets road
+
+        if (!racecar || !road) {
+            racecarAnimationId = null;                                     // Clears loop if missing
+            return;
+        }
+
+        const idleRoadSpeed = racecarPhase === "idle" ? 0 : 0.25;                  // Keeps road gently moving
+
+        raceRoadOffset += Math.max(raceRoadSpeed, idleRoadSpeed);                  // Scrolls road even without blowing
+        raceRoadSpeed *= 0.94;                                                     // Road slows naturally
+        racecarVelocity *= 0.92;                                           // Car nudge slows
+        racecarProgress += racecarVelocity;                                // Moves car slightly
+
+        if (racecarPhase === "racing") {
+            racecarProgress = Math.min(racecarProgress, 7);                         // Keeps car mostly in place
+        }
+
+        if (racecarPhase === "finishing") {
+            racecarProgress += racecarVelocity * 1.15;                              // Final blow carries car across finish
+            racecarProgress = Math.min(racecarProgress, 82);                        // Stops after full car crosses
+        }
+
+        moveRoadLines();                                                           // Moves and recycles road lines
+
+        racecar.style.transform =
+            `translateX(-50%) translateY(-${racecarProgress}vh)`;          // Nudges car upward
+
+        if (racecarPhase === "finishing" && racecarProgress >= 48) {
+            racecarPhase = "celebrating";                                          // Stops more blow input
+            racecarVelocity = 0;                                                    // Stops car
+            racecarAnimationId = null;                                              // Clears animation loop
+            showRacecarCelebration();                                               // Starts celebration
+            return;
+        }
+
+        if (racecarPhase === "racing" || racecarPhase === "finishing" || raceRoadSpeed > 0.08 || racecarVelocity > 0.01) {
+            animateRacecarTires();                                         // Spins tires while moving
+            racecarAnimationId = requestAnimationFrame(animateCar);        // Keeps animation going
+        } else {
+            raceRoadSpeed = 0;                                             // Fully stops road
+            racecarVelocity = 0;                                           // Fully stops car
+            racecarAnimationId = null;                                     // Clears tracker
+        }
+    }
+
+    racecarAnimationId = requestAnimationFrame(animateCar);                // Starts animation
+}
+
+function moveRoadLines() {
+    const roadLines = document.querySelectorAll(".road-line");             // Gets road stripes
+
+    roadLines.forEach((line, index) => {
+        const baseTop = -10 + index * 30;                                  // Spaces lines evenly
+        const loopedOffset = raceRoadOffset % 120;                         // Loops road movement
+
+        line.style.top = `${baseTop + loopedOffset}%`;                     // Moves line downward
+
+        if (baseTop + loopedOffset > 105) {
+            line.style.top = `${baseTop + loopedOffset - 120}%`;           // Sends line back to top
+        }
+    });
+
+    const finishLine = document.getElementById("racecar-finish-line");          // Gets finish line
+
+    if (finishLine && raceFinishReady) {
+        const finishTop = -60 + (raceRoadOffset - raceFinishStartOffset);
+        finishLine.style.top = `${finishTop}%`;                                 // Updates finish position
+    }
+}
+
+function showRacecarFinishLine() {
+    const finishLine = document.getElementById("racecar-finish-line");      // Gets finish line
+
+    if (!finishLine) return;                                                // Stops if missing
+
+    raceFinishStartOffset = raceRoadOffset;                                 // Captures road position once
+    finishLine.classList.add("finish-line-active");                        // Activates moving finish line
+}
+
+function animateRacecarTires() {
+    const tires = document.querySelectorAll(".racecar-tire");              // Gets all tires
+
+    racecarTireFrame = (racecarTireFrame + 1) % 3;                         // Cycles 0, 1, 2
+
+    tires.forEach(tire => {
+        tire.classList.remove("tire-frame-1", "tire-frame-2", "tire-frame-3"); // Clears frames
+        tire.classList.add(`tire-frame-${racecarTireFrame + 1}`);          // Adds current frame
+    });
+}
+
+function createRacecarWindEffect() {
+    const racecarWorld = document.getElementById("racecar-world");         // Gets racecar world
+
+    if (!racecarWorld) return;                                             // Stops if missing
+
+    const wind = document.createElement("div");                            // Creates wind puff
+
+    wind.classList.add("racecar-wind");                                    // Adds wind styling
+    wind.textContent = "💨";                                                // Temporary wind visual
+
+    racecarWorld.appendChild(wind);                                        // Adds to screen
+
+    setTimeout(() => {
+        wind.remove();                                                     // Removes wind puff
+    }, 900);
+}
+
+/* =====================================================
    WIND EFFECT
    ===================================================== */
 
@@ -280,26 +548,40 @@ function createWindEffect() {
 }
 
 /* =====================================================
+   HANDLE BUBBLE BLOW
+   ===================================================== */
+
+function handleBubbleBlow(blowStrength = 45) {
+    blowCount++;                                                           // Counts one completed blow
+
+    updateMeter();                                                         // Updates meter
+    createBubbleBurst(blowStrength);                                       // Creates bubbles
+    createWindEffect();                                                    // Creates wind
+    animateBubbleWand();                                                   // Animates wand
+
+    const message = getRandomMessage(bubbleMessages);                      // Gets random bubble message
+    speakMessage(message);                                                 // Speaks message
+
+    if (blowCount >= requiredBlows) {
+        currentActivity = "celebrating";                                   // Prevents extra blows
+        setTimeout(showActivityCelebration, 2000);                         // Starts celebration
+    }
+}
+
+/* =====================================================
    HANDLE BLOW
    Called by microphone.js and Test Blow button
    ===================================================== */
 
 function handleBlow(blowStrength = 45) {
-    if (currentActivity !== "bubbles") return;
+    if (currentActivity === "bubbles") {
+        handleBubbleBlow(blowStrength);                                    // Sends blow to bubbles
+        return;
+    }
 
-    blowCount++;
-
-    updateMeter();
-    createBubbleBurst(blowStrength);
-    createWindEffect();
-    animateBubbleWand();
-
-    const message = getRandomMessage(bubbleMessages);
-    speakMessage(message);
-
-    if (blowCount >= requiredBlows) {
-        currentActivity = "celebrating";
-        setTimeout(showActivityCelebration, 2000);
+    if (currentActivity === "racecar") {
+        handleRacecarBlow(blowStrength);                                   // Sends blow to racecar
+        return;
     }
 }
 
@@ -328,6 +610,47 @@ function showActivityCelebration() {
         currentActivity = null;                                             // Fully resets activity state
         resetMeter();                                                       // Clears meter
         showScreen(menuScreen);                                             // Returns to menu
+    }, 3000);
+}
+
+/* =====================================================
+   SHOW RACECAR CELEBRATION
+   ===================================================== */
+
+function showRacecarCelebration() {
+    const activityPoof = document.getElementById("activity-poof");         // Gets activity Poof
+
+    if (activityPoof) {
+        activityPoof.classList.add("poof-center-celebration");             // Moves Poof to center
+    }
+
+    startCelebrationSparkles();                                            // Starts sparkles
+
+    const message = getRandomMessage(racecarCelebrationMessages);          // Gets racecar celebration message
+    speakMessage(message);                                                 // Audio only
+
+    setTimeout(() => {
+
+        if (activityPoof) {
+            activityPoof.classList.remove("poof-center-celebration");
+        }
+
+        stopCelebrationSparkles();
+
+        currentActivity = null;
+
+        racecarProgress = 0;
+        racecarVelocity = 0;
+        raceRoadOffset = 0;
+        raceRoadSpeed = 0;
+        racecarPhase = "idle";
+        raceFinishReady = false;                                                    // Resets finish state
+        raceFinishProgress = 0;                                                     // Resets race progress
+
+        resetMeter();
+
+        showScreen(menuScreen);
+
     }, 3000);
 }
 
@@ -385,7 +708,11 @@ activityCards.forEach(card => {
         const activityName = card.dataset.activity;                         // Gets selected activity
 
         if (activityName === "bubbles") {
-            startBubbleActivity();                                          // Starts bubbles only for now
+            startBubbleActivity();                                                 // Starts bubbles
+        }
+
+        if (activityName === "racecar") {
+            startRacecarActivity();                                                // Starts racecar
         }
     });
 });
@@ -395,9 +722,24 @@ activityCards.forEach(card => {
    ===================================================== */
 
 backButton.addEventListener("click", () => {
-    currentActivity = null;                                                 // Stops activity
-    resetMeter();                                                           // Clears progress
-    showScreen(menuScreen);                                                 // Returns to menu
+    currentActivity = null;
+
+    racecarProgress = 0;
+    racecarVelocity = 0;
+    raceRoadOffset = 0;
+    raceRoadSpeed = 0;
+    racecarPhase = "idle";
+    raceFinishReady = false;                                                    // Resets finish state
+    raceFinishProgress = 0;                                                     // Resets race progress
+
+    if (racecarAnimationId) {
+        cancelAnimationFrame(racecarAnimationId);
+        racecarAnimationId = null;
+    }
+
+    resetMeter();
+
+    showScreen(menuScreen);
 });
 
 /* =====================================================
