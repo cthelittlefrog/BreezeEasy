@@ -66,7 +66,7 @@ function updateBlowingHelp(now) {
     const playing = activityScreen.classList.contains("active-screen") &&
         (currentActivity === "bubbles" ||
             (currentActivity === "racecar" && ["racing", "finishing"].includes(racecarPhase)));
-    const speaking = window.speechSynthesis?.speaking || window.speechSynthesis?.pending;
+    const speaking = isPoofSpeaking();
     blowingReminder.update(now, playing && !document.hidden && !speaking &&
         settingsModal.style.display !== "flex" && !calibrationSession);
     requestAnimationFrame(updateBlowingHelp);
@@ -120,7 +120,7 @@ function speakMessage(message) {
     if (!voiceToggle || !voiceToggle.checked) return;                       // Stops voice if setting is off
     if (!window.speechSynthesis) return;                                    // Stops if browser does not support speech
 
-    speechSynthesis.cancel();                                               // Prevents messages from stacking
+    const finishSpeech = pauseForPoofSpeech();
 
     const speech = new SpeechSynthesisUtterance(message);                   // Creates spoken message
 
@@ -128,10 +128,19 @@ function speakMessage(message) {
     speech.pitch = 1.4;                                                     // Softer playful voice
     speech.volume = 0.8;                                                    // Comfortable volume
 
-    speechSynthesis.speak(speech);                                          // Speaks message
+    speech.onend = finishSpeech;
+    speech.onerror = finishSpeech;
+    try { speechSynthesis.speak(speech); }
+    catch { finishSpeech(); }
+}
+
+async function speakActivityInstruction(message, activity) {
+    const ready = await startMicrophone();
+    if (ready && currentActivity === activity && settingsModal.style.display !== "flex") speakMessage(message);
 }
 
 function showScreen(screenToShow) {
+    activeBlowDetector.reset();
     blowingReminder.reset();
     menuScreen.classList.remove("active-screen");                          // Hides menu
     activityScreen.classList.remove("active-screen");                      // Hides activity
@@ -181,7 +190,7 @@ function startBubbleActivity() {
     }
 
     loadBubbleActivity();                                                   // Loads fresh bubble world
-    speakMessage("Blow bubbles!");                                          // Audio instruction
+    speakActivityInstruction("Blow bubbles!", "bubbles");                                          // Audio instruction
 }
 
 /* =====================================================
@@ -217,7 +226,7 @@ function startRacecarActivity() {
     }
 
     loadRacecarActivity();                                                 // Loads fresh racecar world
-    speakMessage("Blow the racecar!");                                     // Audio instruction
+    speakActivityInstruction("Blow the racecar!", "racecar");                                     // Audio instruction
     startRacecarMotion();                                                      // Starts gentle road movement
 }
 
@@ -782,7 +791,7 @@ function openSettings() {
     cancelSettingsHold();
     blowingReminder.reset();
     settingsPreviousFocus = document.activeElement;
-    window.speechSynthesis?.cancel();
+    cancelPoofSpeech();
     activeBlowDetector.reset();
     settingsModal.style.display = "flex";
     closeSettingsButton.focus();
@@ -839,7 +848,4 @@ settingsModal.addEventListener("keydown", event => {
     }
 });
 
-/* Retry from activity taps too, so a denied/interrupted microphone is recoverable. */
-activityCards.forEach(card => {
-    card.addEventListener("click", () => startMicrophone());
-});
+/* Activity instructions start capture before speech, from the activity tap. */

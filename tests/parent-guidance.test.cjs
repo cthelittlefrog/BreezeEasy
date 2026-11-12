@@ -52,6 +52,8 @@ function app() {
         setTimeout(callback) { const key = ++id; timers.set(key, callback); return key; },
         clearTimeout(key) { timers.delete(key); }, cancelAnimationFrame() {},
         activeBlowDetector: { reset() {} }, cancelCalibration() {},
+        isPoofSpeaking: () => Boolean(context.speechSynthesis.speaking),
+        cancelPoofSpeech() { context.speechSynthesis.cancel(); },
         speechSynthesis: { speaking: false, pending: false, cancel() {} }, addEventListener() {}
     });
     context.window = context;

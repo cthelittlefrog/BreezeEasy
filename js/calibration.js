@@ -5,6 +5,7 @@ let calibrationSession = null;
 let calibrationRequest = 0;
 let testBlowCount = 0;
 let testBlowTimer;
+let calibrationWatchdog;
 
 const calibrationButton = document.getElementById("calibrate-blowing");
 const calibrationCancel = document.getElementById("cancel-calibration");
@@ -68,6 +69,8 @@ function showCalibrationStep(phase, title, hint = "") {
 }
 
 function cancelCalibration() {
+    clearTimeout(calibrationWatchdog);
+    if (calibrationSession?.phase === "starting") releaseMicrophone();
     calibrationRequest++;
     if (calibrationSession && !["finished", "error"].includes(calibrationSession.phase)) {
         calibrationStatus.textContent = "Calibration canceled. Previous settings kept.";
@@ -85,7 +88,7 @@ function cancelCalibration() {
 function showCalibrationDiagnostics(outcome) {
     if (!calibrationSession) return;
     const report = {
-        diagnosticVersion: "phone-calibration-2", outcome,
+        diagnosticVersion: "phone-calibration-3", outcome,
         microphone: getMicrophoneDiagnostics(),
         measurements: summarizeCalibration(calibrationSession.quiet, calibrationSession.blows)
     };
@@ -95,11 +98,28 @@ function showCalibrationDiagnostics(outcome) {
 
 function calibrationError(message) {
     if (!calibrationSession) return;
+    clearTimeout(calibrationWatchdog);
     showCalibrationDiagnostics(message);
     calibrationSession.phase = "error";
     calibrationStatus.textContent = "Previous settings kept.";
     showCalibrationStep("error", "Let's Try Again", message);
     activeBlowDetector.reset();
+}
+
+function watchCalibration(request) {
+    clearTimeout(calibrationWatchdog);
+    const check = () => {
+        const session = calibrationSession;
+        if (!session || request !== calibrationRequest || ["finished", "error"].includes(session.phase)) return;
+        const limit = session.phase === "starting" ? 23000 : 2000;
+        if (session.phase !== "ready" && performance.now() - session.heartbeat > limit) {
+            calibrationError("Microphone stopped sending samples. Tap Try Again to reconnect.");
+            releaseMicrophone();
+            return;
+        }
+        calibrationWatchdog = setTimeout(check, 500);
+    };
+    calibrationWatchdog = setTimeout(check, 500);
 }
 
 async function beginCalibration() {
@@ -108,19 +128,21 @@ async function beginCalibration() {
     document.getElementById("calibration-diagnostics").open = false;
     document.getElementById("calibration-copy-status").textContent = "";
     const request = ++calibrationRequest;
-    window.speechSynthesis?.cancel();
-    calibrationSession = { phase: "starting", quiet: [], blows: [], started: null, lastSample: null };
+    cancelPoofSpeech();
+    calibrationSession = { phase: "starting", quiet: [], blows: [], started: null, lastSample: null, heartbeat: performance.now() };
+    watchCalibration(request);
     setCalibrationBusy(true);
     if (!calibrationDialog.open) calibrationDialog.showModal();
     showCalibrationStep("quiet", "Quiet Please");
     calibrationProgress.value = 0;
     const ready = await startMicrophone({ restart: true });
-    if (request !== calibrationRequest) return;
+    if (request !== calibrationRequest || !calibrationSession || calibrationSession.phase === "error") return;
     if (!ready) {
         calibrationError(microphoneStatus);
         return;
     }
     calibrationSession.phase = "quiet";
+    calibrationSession.heartbeat = performance.now();
 }
 
 calibrationButton.addEventListener("click", beginCalibration);
@@ -131,6 +153,7 @@ calibrationAction.addEventListener("click", () => {
         return beginCalibration();
     } else if (calibrationSession?.phase === "ready") {
         calibrationSession.phase = "countdown";
+        calibrationSession.heartbeat = performance.now();
         calibrationSession.started = null;
         calibrationSession.lastSample = null;
         calibrationCountdown.textContent = "3";
@@ -151,6 +174,7 @@ function updateCalibration(sample, now) {
         return;
     }
     session.lastSample = now;
+    session.heartbeat = performance.now();
     session.started ??= now;
     const elapsed = now - session.started;
     if (session.phase === "countdown") {
@@ -183,6 +207,7 @@ function updateCalibration(sample, now) {
         refreshSensitivity();
         const saved = saveBlowProfile();
         showCalibrationDiagnostics("Calibration succeeded");
+        clearTimeout(calibrationWatchdog);
         session.phase = "finished";
         calibrationProgress.value = 100;
         activeBlowDetector.reset();

@@ -4,23 +4,32 @@ const vm = require('node:vm');
 const fs = require('node:fs');
 const path = require('node:path');
 
-function app({ saved, blockedStorage = false, denied = false, zeroOnCapture = 0, pauseOnCapture = false } = {}) {
+function app({ saved, blockedStorage = false, denied = false, zeroOnCapture = 0, pauseOnCapture = false, fullApp = false, hangResume = false, hangCapture = false } = {}) {
     const elements = new Map();
     const storage = new Map(saved ? [['breezeEasy.blowProfile.v1', saved]] : []);
-    const frames = new Map(), tracks = [], contexts = [];
-    let requests = 0, frameId = 0;
+    const frames = new Map(), tracks = [], contexts = [], timers = new Map(), lateCaptures = [];
+    let requests = 0, frameId = 0, timerId = 0, now = 0;
     const element = id => {
-        if (!elements.has(id)) elements.set(id, {
+        if (!elements.has(id)) {
+            const classes = new Set();
+            elements.set(id, {
+            classList: { add: key => classes.add(key), remove: key => classes.delete(key), contains: key => classes.has(key) },
+            querySelectorAll() { return []; },
             textContent: '', value: 0, style: {}, handlers: {}, open: false,
             showModal() { this.open = true; }, close() { this.open = false; }, focus() {},
             addEventListener(event, handler) { this.handlers[event] = handler; }
         });
+        }
         return elements.get(id);
     };
     element('settings-modal').style.display = 'flex';
     const context = vm.createContext({
-        console, Uint8Array, Float32Array, setTimeout: () => 1, clearTimeout() {},
-        document: { hidden: false, getElementById: element, addEventListener() {} },
+        console, Uint8Array, Float32Array,
+        performance: { now: () => now },
+        setTimeout(callback, delay) { timers.set(++timerId, { due: now + delay, callback }); return timerId; },
+        clearTimeout: id => timers.delete(id),
+        addEventListener() {},
+        document: { hidden: false, getElementById: element, addEventListener() {}, querySelectorAll: () => [] },
         navigator: { mediaDevices: { getUserMedia: async () => {
             requests++;
             if (context.denied) throw Object.assign(new Error('denied'), { name: 'NotAllowedError' });
@@ -33,7 +42,9 @@ function app({ saved, blockedStorage = false, denied = false, zeroOnCapture = 0,
             if (pauseOnCapture) {
                 const audio = contexts.at(-1); audio.state = 'suspended'; audio.statechange?.();
             }
-            return { getAudioTracks: () => [track], getTracks: () => [track] };
+            const stream = { getAudioTracks: () => [track], getTracks: () => [track] };
+            if (context.hangCapture) return new Promise(resolve => lateCaptures.push(() => resolve(stream)));
+            return stream;
         } } },
         requestAnimationFrame: callback => { frames.set(++frameId, callback); return frameId; },
         cancelAnimationFrame: id => frames.delete(id),
@@ -41,15 +52,19 @@ function app({ saved, blockedStorage = false, denied = false, zeroOnCapture = 0,
             getItem: key => { if (blockedStorage) throw new Error('blocked'); return storage.get(key) ?? null; },
             setItem: (key, value) => { if (blockedStorage) throw new Error('blocked'); storage.set(key, value); }
         },
-        currentActivity: 'bubbles', denied, level: 'quiet', rewards: 0,
+        currentActivity: 'bubbles', denied, hangResume, hangCapture, level: 'quiet', rewards: 0,
         handleBlow: () => { context.rewards++; }
     });
     context.window = context;
-    context.speechSynthesis = { speaking: false, pending: false, cancel() {} };
+    context.speechSynthesis = { speaking: false, pending: false,
+        cancel() { this.speaking = false; this.pending = false; },
+        speak(speech) { this.speaking = true; context.lastSpeech = speech; }
+    };
+    context.SpeechSynthesisUtterance = class { constructor(text) { this.text = text; } };
     context.AudioContext = class {
         state = 'running'; sampleRate = 48000; resumeCount = 0;
         constructor() { contexts.push(this); }
-        async resume() { this.resumeCount++; this.state = 'running'; }
+        async resume() { this.resumeCount++; if (context.hangResume) return new Promise(() => {}); this.state = 'running'; }
         async close() { this.state = 'closed'; this.statechange?.(); }
         addEventListener(event, handler) { this[event] = handler; }
         createMediaStreamSource(stream) { this.track = stream.getAudioTracks()[0]; return { connect() {}, disconnect() {} }; }
@@ -68,13 +83,26 @@ function app({ saved, blockedStorage = false, denied = false, zeroOnCapture = 0,
     for (const file of ['blow-detection.js', 'microphone.js', 'calibration.js']) {
         vm.runInContext(fs.readFileSync(path.join(__dirname, '../js', file), 'utf8'), context);
     }
-    let now = 0;
+    if (fullApp) {
+        for (const file of ['parent-guidance.js', 'app.js']) {
+            vm.runInContext(fs.readFileSync(path.join(__dirname, '../js', file), 'utf8'), context);
+        }
+    }
+    function fireTimers() {
+        for (const [id, timer] of [...timers]) {
+            if (timer.due <= now && timers.has(id)) { timers.delete(id); timer.callback(); }
+        }
+    }
     return {
         context, element, storage, tracks, contexts, get track() { return tracks.at(-1); }, requests: () => requests,
         pendingFrames: () => frames.size,
+        async flush() { for (let i = 0; i < 40; i++) await Promise.resolve(); },
+        resolveLateCapture: index => lateCaptures[index](),
+        stall(duration) { for (const end = now + duration; now < end; now += 100) fireTimers(); },
         click: id => element(id).handlers.click(),
         tick(duration) {
             for (const end = now + duration; now < end; now += 1000 / 60) {
+                fireTimers();
                 const pending = [...frames.values()]; frames.clear(); pending.forEach(callback => callback(now));
             }
         },
@@ -319,4 +347,108 @@ test('diagnostics distinguish FFT zeros from a nonzero waveform', async () => {
     assert.equal(report.measurements.blowing.peak, 0);
     assert.ok(report.measurements.blowing.maxWaveformRms > 0);
     assert.equal(instance.storage.size, 0);
+});
+
+
+test('a pending audio resume times out and leaves a working Try Again action', async () => {
+    const instance = app({ hangResume: true });
+    const pending = instance.click('calibrate-blowing');
+    instance.stall(3500); await pending;
+    assert.equal(instance.run('calibrationSession.phase'), 'error');
+    assert.match(instance.element('calibration-step-hint').textContent, /did not resume/);
+    assert.equal(instance.run('microphoneStartPromise'), null);
+    instance.context.hangResume = false;
+    await instance.click('calibration-action'); instance.tick(3100);
+    assert.equal(instance.element('calibration-action').textContent, 'Ready to Blow?');
+});
+
+test('a late permission result is stopped and cannot replace a newer microphone', async () => {
+    const instance = app({ hangCapture: true });
+    const pending = instance.click('calibrate-blowing'); await instance.flush();
+    instance.stall(16000); await pending;
+    assert.equal(instance.run('calibrationSession.phase'), 'error');
+    assert.match(instance.element('calibration-step-hint').textContent, /did not start/);
+    instance.context.hangCapture = false;
+    await instance.click('calibration-action');
+    const currentTrack = instance.track;
+    instance.resolveLateCapture(0); await instance.flush();
+    assert.equal(instance.tracks[0].readyState, 'ended');
+    assert.equal(instance.track, currentTrack);
+    assert.equal(currentTrack.readyState, 'live');
+    instance.tick(3100);
+    assert.equal(instance.element('calibration-action').textContent, 'Ready to Blow?');
+});
+
+test('quiet sampling cannot stay stuck when animation callbacks stop arriving', async () => {
+    const instance = app(); await instance.click('calibrate-blowing'); instance.tick(300);
+    instance.stall(3000);
+    assert.equal(instance.run('calibrationSession.phase'), 'error');
+    assert.match(instance.element('calibration-step-hint').textContent, /stopped sending samples/);
+    assert.equal(instance.pendingFrames(), 0);
+    await instance.click('calibration-action'); instance.tick(3100);
+    assert.equal(instance.element('calibration-action').textContent, 'Ready to Blow?');
+});
+
+test('canceling a pending start permits a new start without waiting for the old one', async () => {
+    const instance = app({ hangCapture: true });
+    const old = instance.click('calibrate-blowing'); await instance.flush();
+    instance.click('cancel-calibration');
+    instance.context.hangCapture = false;
+    await instance.click('calibrate-blowing');
+    instance.resolveLateCapture(0); await old;
+    assert.equal(instance.run('calibrationSession.phase'), 'quiet');
+    assert.equal(instance.run('microphoneStartPromise'), null);
+    assert.equal(instance.tracks[0].readyState, 'ended');
+});
+
+test('calibration hands off to bubbles, and listening resumes after the spoken prompt', async () => {
+    const instance = app({ fullApp: true }); await calibrate(instance);
+    await instance.click('calibration-action');
+    instance.element('settings-modal').style.display = 'none';
+    instance.element('voice-toggle').checked = true;
+    instance.context.level = 'quiet';
+    instance.run('handleBubbleBlow = () => { rewards++; }; startBubbleActivity();');
+    await instance.flush();
+    assert.equal(instance.context.lastSpeech.text, 'Blow bubbles!');
+    assert.equal(instance.run('isPoofSpeaking()'), true);
+    const audio = instance.contexts.at(-1); audio.state = 'suspended'; audio.statechange();
+    instance.context.lastSpeech.onend(); await instance.flush();
+    assert.equal(audio.state, 'running');
+    assert.equal(instance.run('isPoofSpeaking()'), false);
+    instance.tick(1000); instance.context.level = 'blow'; instance.tick(1000);
+    assert.equal(instance.context.rewards, 1);
+});
+
+test('missing speech callbacks and stuck pending flags cannot suppress play forever', async () => {
+    const instance = app({ fullApp: true }); await calibrate(instance);
+    await instance.click('calibration-action');
+    instance.element('settings-modal').style.display = 'none';
+    instance.element('voice-toggle').checked = true;
+    instance.context.level = 'quiet';
+    instance.run('handleBubbleBlow = () => { rewards++; }; startBubbleActivity();');
+    await instance.flush();
+    // Simulate a browser leaving its queue flags set even after cancellation.
+    instance.context.speechSynthesis.cancel = () => {};
+    instance.context.speechSynthesis.pending = true;
+    instance.tick(8500); await instance.flush();
+    assert.equal(instance.run('isPoofSpeaking()'), false);
+    instance.context.level = 'blow'; instance.tick(1000);
+    assert.equal(instance.context.rewards, 1);
+});
+
+test('speech completion keeps the one-breath latch until a quiet release', async () => {
+    const instance = app(); await calibrate(instance);
+    await instance.click('calibration-action');
+    instance.element('settings-modal').style.display = 'none';
+    instance.context.level = 'quiet'; instance.tick(1000);
+    instance.context.level = 'blow'; instance.tick(1000);
+    assert.equal(instance.context.rewards, 1);
+    const finish = instance.run('pauseForPoofSpeech()');
+    const audio = instance.contexts.at(-1); audio.state = 'suspended'; audio.statechange();
+    instance.tick(1000); finish(); await instance.flush();
+    instance.tick(1500);
+    assert.equal(instance.context.rewards, 1);
+    instance.context.level = 'quiet'; instance.tick(1000);
+    instance.context.level = 'blow'; instance.tick(1000);
+    assert.equal(instance.context.rewards, 2);
 });
