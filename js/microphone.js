@@ -1,149 +1,118 @@
-/* =====================================================
-   MICROPHONE VARIABLES
-   ===================================================== */
-
+/* One microphone and one monitoring loop, shared by calibration and play. */
 let audioContext;
 let analyser;
 let microphone;
-let dataArray;
-
-let blowCooldown = false;
-let possibleBlowFrames = 0;
-let previousVolume = 0;
-
-let blowThreshold = 35;
-let requiredBlowFrames = 18;
-let maxVolumeJump = 8;
-let breathinessThreshold = 0.45;
-
-/* =====================================================
-   START MICROPHONE
-   ===================================================== */
+let microphoneStream;
+let microphoneStartPromise;
+let microphoneAnimationId;
+let microphoneStatus = "Tap an activity or Enable microphone to begin.";
+let activeBlowDetector = createBlowDetector();
 
 async function startMicrophone() {
-
+    if (microphoneStartPromise) return microphoneStartPromise;
+    microphoneStartPromise = connectMicrophone();
     try {
-
-        const stream =
-            await navigator.mediaDevices.getUserMedia({
-                audio: true
-            });
-
-        audioContext =
-            new AudioContext();
-
-        analyser =
-            audioContext.createAnalyser();
-
-        microphone =
-            audioContext.createMediaStreamSource(
-                stream
-            );
-
-        microphone.connect(analyser);
-
-        analyser.fftSize = 256;
-
-        const bufferLength =
-            analyser.frequencyBinCount;
-
-        dataArray =
-            new Uint8Array(bufferLength);
-
-        monitorMicrophone();
-
-    } catch (error) {
-
-        console.error(
-            "Microphone access denied.",
-            error
-        );
+        return await microphoneStartPromise;
+    } finally {
+        microphoneStartPromise = null;
     }
 }
 
-/* =====================================================
-   MONITOR MICROPHONE
-   ===================================================== */
+async function connectMicrophone() {
+    try {
+        if (!navigator.mediaDevices?.getUserMedia) {
+            throw new Error("Microphone needs HTTPS or localhost in a supported browser.");
+        }
+        if (!audioContext || audioContext.state === "closed") {
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            audioContext.addEventListener?.("statechange", () => {
+                if (audioContext.state !== "running") {
+                    cancelCalibration();
+                    microphoneStatus = "Microphone paused. Tap an activity or Enable microphone to resume.";
+                    updateMicrophoneStatus();
+                }
+            });
+        }
+        await audioContext.resume();
+        if (!microphoneStream?.getAudioTracks().some(track => track.readyState === "live")) {
+            microphone?.disconnect();
+            microphoneStream?.getTracks().forEach(track => track.stop());
+            microphoneStream = await navigator.mediaDevices.getUserMedia({
+                audio: { echoCancellation: true, noiseSuppression: false, autoGainControl: false }
+            });
+            analyser = audioContext.createAnalyser();
+            analyser.fftSize = 256;
+            analyser.smoothingTimeConstant = 0.2;
+            microphone = audioContext.createMediaStreamSource(microphoneStream);
+            microphone.connect(analyser);
+            microphoneStream.getAudioTracks()[0].addEventListener("ended", () => {
+                microphoneStatus = "Microphone disconnected. Tap Enable microphone to retry.";
+                cancelCalibration();
+                updateMicrophoneStatus();
+            });
+        }
+        microphoneStatus = "Microphone ready.";
+        activeBlowDetector.reset();
+        if (!microphoneAnimationId) monitorMicrophone();
+        updateMicrophoneStatus();
+        return true;
+    } catch (error) {
+        microphoneStatus = error.name === "NotAllowedError"
+            ? "Microphone permission blocked. Allow it in your browser's site settings, then tap Enable microphone."
+            : error.name === "NotFoundError"
+                ? "No microphone found. Connect one and try again."
+                : error.name === "NotReadableError"
+                    ? "Microphone unavailable. Close other apps using it, then try again."
+                    : error.message;
+        updateMicrophoneStatus();
+        return false;
+    }
+}
+
+function updateMicrophoneStatus() {
+    const status = document.getElementById("microphone-status");
+    if (status) status.textContent = microphoneStatus;
+}
 
 function monitorMicrophone() {
-
-    function detect() {
-
-        analyser.getByteFrequencyData(
-            dataArray
-        );
-
-        let volume = 0;
-
-        for (let i = 0; i < dataArray.length; i++) {
-
-            volume += dataArray[i];
+    const data = new Uint8Array(analyser.frequencyBinCount);
+    function detect(now) {
+        microphoneAnimationId = requestAnimationFrame(detect);
+        if (document.hidden || audioContext.state !== "running" ||
+            !microphoneStream.getAudioTracks().some(track => track.readyState === "live")) {
+            activeBlowDetector.reset();
+            return;
         }
-
-        volume =
-            volume / dataArray.length;
-
-        let lowMidEnergy = 0;
-        let highEnergy = 0;
-
-        for (let i = 0; i < dataArray.length; i++) {
-            if (i < dataArray.length * 0.30) {
-                lowMidEnergy += dataArray[i];
-            } else {
-                highEnergy += dataArray[i];
-            }
+        analyser.getByteFrequencyData(data);
+        let low = 0;
+        let high = 0;
+        for (let i = 0; i < data.length; i++) {
+            if (i < data.length * 0.30) low += data[i];
+            else high += data[i];
         }
-
-        const breathinessRatio = highEnergy / Math.max(lowMidEnergy, 1);
-
-        const isBreathy =
-            breathinessRatio > breathinessThreshold;
-
-        const volumeJump =
-            Math.abs(volume - previousVolume);                              // Detects sudden sharp sounds
-
-        const isTooSudden =
-            volumeJump > maxVolumeJump;                                     // Rejects claps and sharp spikes
-
-        const isPossibleBlow =
-            volume > blowThreshold &&
-            !isTooSudden &&
-            isBreathy;
-
-        if (
-            isPossibleBlow &&
-            currentActivity
-        ) {
-
-            possibleBlowFrames++;                                           // Counts sustained blowing frames
-
-        } else {
-
-            possibleBlowFrames = 0;                                         // Resets on silence or sudden sounds
+        const sample = { volume: (low + high) / data.length, ratio: high / Math.max(low, 1) };
+        updateCalibration(sample, now);
+        const inSettings = document.getElementById("settings-modal").style.display === "flex";
+        const speaking = window.speechSynthesis?.speaking || window.speechSynthesis?.pending;
+        const playing = Boolean(currentActivity) && !inSettings;
+        if (speaking) {
+            // Keep the release latch: speech after a reward must not rearm a long breath.
+            activeBlowDetector.pause();
+            return;
         }
-
-        if (
-            possibleBlowFrames >= requiredBlowFrames &&
-            !blowCooldown &&
-            currentActivity
-        ) {
-
-            blowCooldown = true;                                            // Prevents rapid repeat triggers
-            possibleBlowFrames = 0;                                         // Resets after successful blow
-
-            handleBlow(volume);                                               // Sends one blow to activity
-
-            setTimeout(() => {
-
-                blowCooldown = false;                                      // Allows next blow after cooldown
-
-            }, 900);
+        if (calibrationSession || (!playing && !inSettings)) {
+            activeBlowDetector.reset();
+            return;
         }
-
-        previousVolume = volume;                                            // Saves current volume for next frame
-
-        requestAnimationFrame(detect);
+        if (activeBlowDetector.process(sample, now, getBlowSettings())) {
+            if (inSettings) showTestBlow();
+            else handleBlow(sample.volume);
+        }
     }
-
-    detect();
+    microphoneAnimationId = requestAnimationFrame(detect);
 }
+
+document.addEventListener("visibilitychange", () => {
+    activeBlowDetector.reset();
+    if (document.hidden) cancelCalibration();
+});

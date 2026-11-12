@@ -755,49 +755,56 @@ testBlowButton.addEventListener("click", () => {
    ===================================================== */
 
 let settingsTimer;
+let settingsPreviousFocus;
 
-settingsTrigger.addEventListener("mousedown", () => {
-    settingsTimer = setTimeout(() => {
-        settingsModal.style.display = "flex";                              // Opens settings after hold
-    }, 3000);
+function openSettings() {
+    settingsPreviousFocus = document.activeElement;
+    window.speechSynthesis?.cancel();
+    activeBlowDetector.reset();
+    settingsModal.style.display = "flex";
+    closeSettingsButton.focus();
+}
+
+function closeSettings() {
+    clearTimeout(settingsTimer);
+    cancelCalibration();
+    settingsModal.style.display = "none";
+    settingsPreviousFocus?.focus();
+}
+
+// Pointer events cover both mouse and touch without duplicate timers.
+settingsTrigger.addEventListener("pointerdown", () => {
+    clearTimeout(settingsTimer);
+    settingsTimer = setTimeout(openSettings, 3000);
+});
+["pointerup", "pointerleave", "pointercancel"].forEach(eventName => {
+    settingsTrigger.addEventListener(eventName, () => clearTimeout(settingsTimer));
+});
+settingsTrigger.addEventListener("contextmenu", event => event.preventDefault());
+settingsTrigger.addEventListener("keydown", event => {
+    if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        openSettings();
+    }
+});
+closeSettingsButton.addEventListener("click", closeSettings);
+settingsModal.addEventListener("keydown", event => {
+    if (event.key === "Escape") closeSettings();
+    if (event.key !== "Tab") return;
+    const focusable = [...settingsModal.querySelectorAll("button, input, summary")]
+        .filter(element => !element.disabled && !element.hidden && element.getClientRects().length);
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+    }
 });
 
-settingsTrigger.addEventListener("mouseup", () => {
-    clearTimeout(settingsTimer);                                            // Cancels hold
+/* Retry from activity taps too, so a denied/interrupted microphone is recoverable. */
+activityCards.forEach(card => {
+    card.addEventListener("click", () => startMicrophone());
 });
-
-settingsTrigger.addEventListener("mouseleave", () => {
-    clearTimeout(settingsTimer);                                            // Cancels hold
-});
-
-settingsTrigger.addEventListener("touchstart", () => {
-    settingsTimer = setTimeout(() => {
-        settingsModal.style.display = "flex";                              // Opens settings on touch hold
-    }, 3000);
-});
-
-settingsTrigger.addEventListener("touchend", () => {
-    clearTimeout(settingsTimer);                                            // Cancels touch hold
-});
-
-/* =====================================================
-   CLOSE SETTINGS
-   ===================================================== */
-
-closeSettingsButton.addEventListener("click", () => {
-    settingsModal.style.display = "none";                                   // Closes modal
-});
-
-/* =====================================================
-   START MICROPHONE AFTER USER INTERACTION
-   ===================================================== */
-
-window.addEventListener(
-    "click",
-    () => {
-        if (typeof startMicrophone === "function") {
-            startMicrophone();                                              // Starts microphone after first click
-        }
-    },
-    { once: true }
-);

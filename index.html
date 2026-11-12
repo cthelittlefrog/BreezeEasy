@@ -176,7 +176,7 @@
     </section>
 
     <!-- Hidden Parent Settings Trigger -->
-    <button id="settings-trigger">
+    <button id="settings-trigger" aria-label="Parent Settings (hold for 3 seconds)">
         ☁️
     </button>
 
@@ -186,11 +186,11 @@
      PARENT SETTINGS MODAL
      ===================================================== -->
 
-<div id="settings-modal">
+<div id="settings-modal" role="dialog" aria-modal="true" aria-labelledby="settings-title">
 
     <div class="settings-panel">
 
-        <h2>Parent Settings</h2>
+        <h2 id="settings-title">Parent Settings</h2>
 
         <label>
             <input
@@ -219,6 +219,26 @@
             Motion
         </label>
 
+        <section class="calibration-controls" aria-labelledby="calibration-title">
+            <h3 id="calibration-title">Blowing</h3>
+            <button id="calibrate-blowing" type="button">Calibrate Blowing</button>
+            <p id="calibration-status" role="status"></p>
+            <details class="calibration-advanced">
+                <summary>Advanced</summary>
+                <div class="calibration-controls">
+                    <label for="blow-sensitivity">Sensitivity: <output id="sensitivity-value" for="blow-sensitivity">50%</output></label>
+                    <input id="blow-sensitivity" type="range" min="0" max="100" step="1" value="50" aria-describedby="sensitivity-help">
+                    <p id="sensitivity-help">Less sensitive ← → More sensitive</p>
+                    <p id="microphone-status" role="status">Microphone not started.</p>
+                    <button id="enable-microphone" type="button">Retry Microphone</button>
+                    <label for="microphone-level">Microphone level</label>
+                    <meter id="microphone-level" min="0" max="255" value="0">0</meter>
+                    <p id="blow-test-status" role="status">Blow to test.</p>
+                    <button id="reset-calibration" type="button">Restore Defaults</button>
+                </div>
+            </details>
+        </section>
+
         <button id="close-settings">
             Close
         </button>
@@ -227,12 +247,27 @@
 
 </div>
 
+<dialog id="calibration-dialog" aria-labelledby="calibration-step-title" aria-describedby="calibration-step-hint">
+    <div class="calibration-step">
+        <div id="calibration-spinner" class="calibration-spinner" aria-hidden="true"></div>
+        <div id="calibration-complete" class="calibration-complete" aria-hidden="true" hidden>✓</div>
+        <h2 id="calibration-step-title" role="status" aria-live="polite" tabindex="-1">Quiet Please</h2>
+        <p id="calibration-step-hint"></p>
+        <div id="calibration-countdown" role="status" aria-live="assertive" hidden>3</div>
+        <progress id="calibration-progress" max="100" value="0" aria-label="Blowing sample progress" hidden></progress>
+        <button id="calibration-action" type="button" hidden>Ready to Blow?</button>
+        <button id="cancel-calibration" class="calibration-cancel" type="button">Cancel</button>
+    </div>
+</dialog>
+
 <!-- =====================================================
      MAIN JAVASCRIPT
      ===================================================== -->
 
 <script src="js/activities.js"></script>
+<script src="js/blow-detection.js"></script>
 <script src="js/microphone.js"></script>
+<script src="js/calibration.js"></script>
 <script src="js/poof.js"></script>
 <script src="js/app.js"></script>
 
