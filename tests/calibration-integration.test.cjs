@@ -18,7 +18,7 @@ function app({ saved, blockedStorage = false, denied = false } = {}) {
         return elements.get(id);
     };
     element('settings-modal').style.display = 'flex';
-    const track = { readyState: 'live', stop() {}, addEventListener(event, handler) { this[event] = handler; } };
+    const track = { getSettings() { return { echoCancellation: true, noiseSuppression: false, autoGainControl: false, sampleRate: 48000, deviceId: 'private-device', groupId: 'private-group' }; }, readyState: 'live', stop() {}, addEventListener(event, handler) { this[event] = handler; } };
     const context = vm.createContext({
         console, Uint8Array, setTimeout: () => 1, clearTimeout() {},
         document: { hidden: false, getElementById: element, addEventListener() {} },
@@ -197,4 +197,31 @@ test('Escape closes just calibration and preserves the parent settings window', 
     assert.equal(instance.element('calibration-dialog').open, false);
     assert.equal(instance.element('settings-modal').style.display, 'flex');
     assert.equal(instance.run('calibrationSession'), null);
+});
+
+
+test('failed calibration exposes numeric diagnostics without device identifiers', async () => {
+    const instance = app();
+    await instance.click('calibrate-blowing'); instance.tick(3100);
+    await instance.click('calibration-action'); instance.tick(9200);
+    const text = instance.element('calibration-diagnostics-text').textContent;
+    const report = JSON.parse(text);
+    assert.equal(instance.element('calibration-diagnostics').hidden, false);
+    assert.equal(report.measurements.samplesAboveCutoff, 0);
+    assert.ok(report.measurements.failedChecks.length > 0);
+    assert.equal(report.microphone.reported.echoCancellation, true);
+    assert.equal(report.microphone.reported.sampleRate, 48000);
+    assert.ok(!text.includes('private-device'));
+    assert.ok(!text.includes('private-group'));
+    assert.equal(instance.storage.size, 0);
+    await instance.click('calibration-action');
+    assert.equal(instance.element('calibration-diagnostics').hidden, true);
+});
+
+test('successful calibration also makes a comparison report available', async () => {
+    const instance = app();
+    await calibrate(instance);
+    const report = JSON.parse(instance.element('calibration-diagnostics-text').textContent);
+    assert.equal(report.outcome, 'Calibration succeeded');
+    assert.equal(report.measurements.failedChecks.length, 0);
 });

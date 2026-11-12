@@ -82,8 +82,20 @@ function cancelCalibration() {
     }
 }
 
+function showCalibrationDiagnostics(outcome) {
+    if (!calibrationSession) return;
+    const report = {
+        diagnosticVersion: "phone-calibration-1", outcome,
+        microphone: getMicrophoneDiagnostics(),
+        measurements: summarizeCalibration(calibrationSession.quiet, calibrationSession.blows)
+    };
+    document.getElementById("calibration-diagnostics-text").textContent = JSON.stringify(report, null, 2);
+    document.getElementById("calibration-diagnostics").hidden = false;
+}
+
 function calibrationError(message) {
     if (!calibrationSession) return;
+    showCalibrationDiagnostics(message);
     calibrationSession.phase = "error";
     calibrationStatus.textContent = "Previous settings kept.";
     showCalibrationStep("error", "Let's Try Again", message);
@@ -92,6 +104,9 @@ function calibrationError(message) {
 
 async function beginCalibration() {
     clearTimeout(testBlowTimer);
+    document.getElementById("calibration-diagnostics").hidden = true;
+    document.getElementById("calibration-diagnostics").open = false;
+    document.getElementById("calibration-copy-status").textContent = "";
     const request = ++calibrationRequest;
     window.speechSynthesis?.cancel();
     calibrationSession = { phase: "starting", quiet: [], blows: [], started: null, lastSample: null };
@@ -167,6 +182,7 @@ function updateCalibration(sample, now) {
         blowProfile = nextProfile;
         refreshSensitivity();
         const saved = saveBlowProfile();
+        showCalibrationDiagnostics("Calibration succeeded");
         session.phase = "finished";
         calibrationProgress.value = 100;
         activeBlowDetector.reset();
@@ -205,4 +221,15 @@ document.getElementById("reset-calibration").addEventListener("click", () => {
     calibrationStatus.textContent = saveBlowProfile()
         ? "Default settings restored."
         : "Default settings restored for this session; browser storage is unavailable.";
+});
+
+document.getElementById("copy-calibration-diagnostics").addEventListener("click", async () => {
+    const report = document.getElementById("calibration-diagnostics-text").textContent;
+    const status = document.getElementById("calibration-copy-status");
+    try {
+        await navigator.clipboard.writeText(report);
+        status.textContent = "Copied.";
+    } catch {
+        status.textContent = "Select and copy the details above, or take a screenshot.";
+    }
 });

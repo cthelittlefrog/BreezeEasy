@@ -56,6 +56,23 @@ let raceFinishReady = false;                                                // T
 let raceFinishProgress = 0;                                                // Tracks race progress for meter
 let raceFinishStartOffset = 0;                                              // Saves road position when finish appears
 
+/* Parent help runs independently of microphone permission or capture. */
+const blowingHelp = document.getElementById("blowing-help");
+const blowingReminder = createBlowingReminder({
+    show: () => { blowingHelp.hidden = false; },
+    hide: () => { blowingHelp.hidden = true; }
+});
+function updateBlowingHelp(now) {
+    const playing = activityScreen.classList.contains("active-screen") &&
+        (currentActivity === "bubbles" ||
+            (currentActivity === "racecar" && ["racing", "finishing"].includes(racecarPhase)));
+    const speaking = window.speechSynthesis?.speaking || window.speechSynthesis?.pending;
+    blowingReminder.update(now, playing && !document.hidden && !speaking &&
+        settingsModal.style.display !== "flex" && !calibrationSession);
+    requestAnimationFrame(updateBlowingHelp);
+}
+requestAnimationFrame(updateBlowingHelp);
+
 /* =====================================================
    MESSAGE POOLS
    ===================================================== */
@@ -115,6 +132,7 @@ function speakMessage(message) {
 }
 
 function showScreen(screenToShow) {
+    blowingReminder.reset();
     menuScreen.classList.remove("active-screen");                          // Hides menu
     activityScreen.classList.remove("active-screen");                      // Hides activity
     celebrationScreen.classList.remove("active-screen");                   // Hides celebration
@@ -451,6 +469,7 @@ function startRacecarMotion() {
             `translateX(-50%) translateY(-${racecarProgress}vh)`;          // Nudges car upward
 
         if (racecarPhase === "finishing" && racecarProgress >= 48) {
+            blowingReminder.reset();
             racecarPhase = "celebrating";                                          // Stops more blow input
             racecarVelocity = 0;                                                    // Stops car
             racecarAnimationId = null;                                              // Clears animation loop
@@ -563,6 +582,7 @@ function handleBubbleBlow(blowStrength = 45) {
     speakMessage(message);                                                 // Speaks message
 
     if (blowCount >= requiredBlows) {
+        blowingReminder.reset();
         currentActivity = "celebrating";                                   // Prevents extra blows
         setTimeout(showActivityCelebration, 2000);                         // Starts celebration
     }
@@ -574,6 +594,7 @@ function handleBubbleBlow(blowStrength = 45) {
    ===================================================== */
 
 function handleBlow(blowStrength = 45) {
+    blowingReminder.reset();
     if (currentActivity === "bubbles") {
         handleBubbleBlow(blowStrength);                                    // Sends blow to bubbles
         return;
@@ -758,6 +779,8 @@ let settingsTimer;
 let settingsPreviousFocus;
 
 function openSettings() {
+    cancelSettingsHold();
+    blowingReminder.reset();
     settingsPreviousFocus = document.activeElement;
     window.speechSynthesis?.cancel();
     activeBlowDetector.reset();
@@ -766,19 +789,31 @@ function openSettings() {
 }
 
 function closeSettings() {
-    clearTimeout(settingsTimer);
+    cancelSettingsHold();
+    blowingReminder.reset();
     cancelCalibration();
     settingsModal.style.display = "none";
     settingsPreviousFocus?.focus();
 }
 
-// Pointer events cover both mouse and touch without duplicate timers.
-settingsTrigger.addEventListener("pointerdown", () => {
+// Show a filling track while the parent holds the button.
+function cancelSettingsHold() {
     clearTimeout(settingsTimer);
+    settingsTrigger.classList.remove("is-holding");
+}
+settingsTrigger.addEventListener("pointerdown", event => {
+    if (event.button !== 0 || event.isPrimary === false) return;
+    cancelSettingsHold();
+    settingsTrigger.classList.add("is-holding");
     settingsTimer = setTimeout(openSettings, 3000);
 });
-["pointerup", "pointerleave", "pointercancel"].forEach(eventName => {
-    settingsTrigger.addEventListener(eventName, () => clearTimeout(settingsTimer));
+["pointerup", "pointerleave", "pointercancel", "lostpointercapture"].forEach(eventName => {
+    settingsTrigger.addEventListener(eventName, cancelSettingsHold);
+});
+window.addEventListener("blur", cancelSettingsHold);
+document.addEventListener("visibilitychange", () => {
+    cancelSettingsHold();
+    blowingReminder.reset();
 });
 settingsTrigger.addEventListener("contextmenu", event => event.preventDefault());
 settingsTrigger.addEventListener("keydown", event => {

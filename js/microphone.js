@@ -116,3 +116,16 @@ document.addEventListener("visibilitychange", () => {
     activeBlowDetector.reset();
     if (document.hidden) cancelCalibration();
 });
+
+function getMicrophoneDiagnostics() {
+    const track = microphoneStream?.getAudioTracks()[0];
+    const actual = track?.getSettings?.() ?? {};
+    // Whitelist audio-processing fields; omit microphone names and device IDs.
+    const fields = ["echoCancellation", "noiseSuppression", "autoGainControl", "sampleRate", "channelCount"];
+    return {
+        requested: { echoCancellation: true, noiseSuppression: false, autoGainControl: false },
+        reported: Object.fromEntries(fields.map(key => [key, actual[key] ?? "not reported"])),
+        contextState: audioContext?.state ?? "not started",
+        contextSampleRate: audioContext?.sampleRate ?? "not reported"
+    };
+}

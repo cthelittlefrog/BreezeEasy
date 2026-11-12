@@ -83,3 +83,23 @@ test('spoken feedback cannot rearm the same long breath', () => {
     feed(detector, 3500, 4000, 0);
     assert.equal(feed(detector, 4000, 4500, 20), 1);
 });
+
+
+test('diagnostics distinguish a weak sample from a sustained louder sample', () => {
+    const weak = context.summarizeCalibration(samples(2, 0.1), samples(4, 0.1));
+    assert.equal(weak.requiredLoudness, 5);
+    assert.equal(weak.blowing.median, 4);
+    assert.equal(weak.samplesAboveCutoff, 0);
+    assert.equal(weak.failedChecks.length, 2);
+    const strong = context.summarizeCalibration(samples(2, 0.1), samples(12, 0.1));
+    assert.equal(strong.failedChecks.length, 0);
+    assert.ok(strong.longestBlowMs > 250);
+});
+
+test('diagnostics expose low sample cadence and tolerate missing samples', () => {
+    const sparse = samples(12, 0.1, 40).map((sample, i) => ({ ...sample, time: i * 150 }));
+    const report = context.summarizeCalibration(samples(2, 0.1), sparse);
+    assert.equal(report.blowing.medianFrameGapMs, 150);
+    assert.equal(report.longestBlowMs, 0);
+    assert.equal(context.summarizeCalibration([], []).quiet.samples, 0);
+});

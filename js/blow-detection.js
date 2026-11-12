@@ -34,7 +34,7 @@ function buildBlowProfile(quiet, blows) {
         lastTime = sample.time;
     }
     if (loud.length < 15 || longest < 250) {
-        throw new Error("Blowing was too close to room noise. Try a quieter place, hold the phone a little closer, and blow comfortably again.");
+        throw new Error("We couldn't distinguish your blowing. Try again, or open Calibration Details.");
     }
     const typical = percentile(loud.map(sample => sample.volume), 0.5);
     return {
@@ -102,5 +102,40 @@ function createBlowDetector() {
             start = null;
             return true;
         }
+    };
+}
+
+/* Numeric troubleshooting only: no audio, device identifiers, or recordings. */
+function summarizeCalibration(quiet, blows) {
+    const room95 = percentile(quiet.map(sample => sample.volume), 0.95);
+    const cutoff = room95 + 3;
+    const above = blows.filter(sample => sample.volume > cutoff);
+    let start = null, last = null, longest = 0;
+    for (const sample of blows) {
+        if (sample.volume <= cutoff || (last !== null && sample.time - last > 120)) start = null;
+        if (sample.volume > cutoff) {
+            start ??= sample.time;
+            longest = Math.max(longest, sample.time - start);
+        }
+        last = sample.time;
+    }
+    const round = value => Math.round(value * 100) / 100;
+    const summarize = samples => ({
+        samples: samples.length,
+        median: round(percentile(samples.map(sample => sample.volume), 0.5)),
+        p95: round(percentile(samples.map(sample => sample.volume), 0.95)),
+        peak: round(percentile(samples.map(sample => sample.volume), 1)),
+        medianFrequencyRatio: round(percentile(samples.map(sample => sample.ratio), 0.5)),
+        medianFrameGapMs: samples.length < 2 ? null : round(percentile(samples.slice(1).map((sample, index) => sample.time - samples[index].time), 0.5))
+    });
+    return {
+        quiet: summarize(quiet), blowing: summarize(blows),
+        requiredLoudness: round(cutoff), samplesAboveCutoff: above.length,
+        longestBlowMs: round(longest),
+        failedChecks: [
+            ...(quiet.length < 30 || blows.length < 30 ? ["Too few samples (need 30 per step)"] : []),
+            ...(above.length < 15 ? ["Too few louder samples (need 15)"] : []),
+            ...(longest < 250 ? ["No sustained louder sample (need 250 ms)"] : [])
+        ]
     };
 }
