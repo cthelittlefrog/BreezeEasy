@@ -85,7 +85,7 @@ function cancelCalibration() {
 function showCalibrationDiagnostics(outcome) {
     if (!calibrationSession) return;
     const report = {
-        diagnosticVersion: "phone-calibration-1", outcome,
+        diagnosticVersion: "phone-calibration-2", outcome,
         microphone: getMicrophoneDiagnostics(),
         measurements: summarizeCalibration(calibrationSession.quiet, calibrationSession.blows)
     };
@@ -114,7 +114,7 @@ async function beginCalibration() {
     if (!calibrationDialog.open) calibrationDialog.showModal();
     showCalibrationStep("quiet", "Quiet Please");
     calibrationProgress.value = 0;
-    const ready = await startMicrophone();
+    const ready = await startMicrophone({ restart: true });
     if (request !== calibrationRequest) return;
     if (!ready) {
         calibrationError(microphoneStatus);
@@ -203,7 +203,7 @@ function showTestBlow() {
 }
 
 calibrationCancel.addEventListener("click", cancelCalibration);
-document.getElementById("enable-microphone").addEventListener("click", () => startMicrophone());
+document.getElementById("enable-microphone").addEventListener("click", () => startMicrophone({ restart: true }));
 sensitivitySlider.addEventListener("input", () => {
     blowProfile.sensitivity = Number(sensitivitySlider.value);
     refreshSensitivity();

@@ -103,3 +103,8 @@ test('diagnostics expose low sample cadence and tolerate missing samples', () =>
     assert.equal(report.longestBlowMs, 0);
     assert.equal(context.summarizeCalibration([], []).quiet.samples, 0);
 });
+
+
+test('all-zero measurements have a microphone-specific retry message', () => {
+    assert.throws(() => buildBlowProfile(samples(0, 0), samples(0, 0)), /Microphone readings stayed at zero/);
+});

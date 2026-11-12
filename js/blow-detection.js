@@ -18,6 +18,9 @@ function buildBlowProfile(quiet, blows) {
     if (quiet.length < 30 || blows.length < 30) {
         throw new Error("Not enough microphone data. Keep this screen open and try again.");
     }
+    if (quiet.every(sample => sample.volume === 0) && blows.every(sample => sample.volume === 0)) {
+        throw new Error("Microphone readings stayed at zero. Tap Try Again to reconnect.");
+    }
     const noise = percentile(quiet.map(sample => sample.volume), 0.95);
     const loud = blows.filter(sample => sample.volume > noise + 3);
     let runStart = null;
@@ -122,6 +125,8 @@ function summarizeCalibration(quiet, blows) {
     const round = value => Math.round(value * 100) / 100;
     const summarize = samples => ({
         samples: samples.length,
+        maxWaveformRms: samples.some(sample => Number.isFinite(sample.waveformRms))
+            ? Number(Math.max(...samples.map(sample => sample.waveformRms ?? 0)).toPrecision(7)) : null,
         median: round(percentile(samples.map(sample => sample.volume), 0.5)),
         p95: round(percentile(samples.map(sample => sample.volume), 0.95)),
         peak: round(percentile(samples.map(sample => sample.volume), 1)),

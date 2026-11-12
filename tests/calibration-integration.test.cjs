@@ -4,11 +4,11 @@ const vm = require('node:vm');
 const fs = require('node:fs');
 const path = require('node:path');
 
-function app({ saved, blockedStorage = false, denied = false } = {}) {
+function app({ saved, blockedStorage = false, denied = false, zeroOnCapture = 0, pauseOnCapture = false } = {}) {
     const elements = new Map();
     const storage = new Map(saved ? [['breezeEasy.blowProfile.v1', saved]] : []);
-    let frame;
-    let requests = 0;
+    const frames = new Map(), tracks = [], contexts = [];
+    let requests = 0, frameId = 0;
     const element = id => {
         if (!elements.has(id)) elements.set(id, {
             textContent: '', value: 0, style: {}, handlers: {}, open: false,
@@ -18,16 +18,25 @@ function app({ saved, blockedStorage = false, denied = false } = {}) {
         return elements.get(id);
     };
     element('settings-modal').style.display = 'flex';
-    const track = { getSettings() { return { echoCancellation: true, noiseSuppression: false, autoGainControl: false, sampleRate: 48000, deviceId: 'private-device', groupId: 'private-group' }; }, readyState: 'live', stop() {}, addEventListener(event, handler) { this[event] = handler; } };
     const context = vm.createContext({
-        console, Uint8Array, setTimeout: () => 1, clearTimeout() {},
+        console, Uint8Array, Float32Array, setTimeout: () => 1, clearTimeout() {},
         document: { hidden: false, getElementById: element, addEventListener() {} },
         navigator: { mediaDevices: { getUserMedia: async () => {
             requests++;
             if (context.denied) throw Object.assign(new Error('denied'), { name: 'NotAllowedError' });
+            const track = {
+                readyState: 'live', muted: false, enabled: true, zero: requests === zeroOnCapture,
+                getSettings() { return { echoCancellation: true, noiseSuppression: false, autoGainControl: false, sampleRate: 48000, deviceId: 'private-device', groupId: 'private-group' }; },
+                stop() { this.readyState = 'ended'; }, addEventListener(event, handler) { this[event] = handler; }
+            };
+            tracks.push(track);
+            if (pauseOnCapture) {
+                const audio = contexts.at(-1); audio.state = 'suspended'; audio.statechange?.();
+            }
             return { getAudioTracks: () => [track], getTracks: () => [track] };
         } } },
-        requestAnimationFrame: callback => { frame = callback; return 1; },
+        requestAnimationFrame: callback => { frames.set(++frameId, callback); return frameId; },
+        cancelAnimationFrame: id => frames.delete(id),
         localStorage: {
             getItem: key => { if (blockedStorage) throw new Error('blocked'); return storage.get(key) ?? null; },
             setItem: (key, value) => { if (blockedStorage) throw new Error('blocked'); storage.set(key, value); }
@@ -38,21 +47,37 @@ function app({ saved, blockedStorage = false, denied = false } = {}) {
     context.window = context;
     context.speechSynthesis = { speaking: false, pending: false, cancel() {} };
     context.AudioContext = class {
-        state = 'running';
-        async resume() { this.state = 'running'; }
-        createMediaStreamSource() { return { connect() {}, disconnect() {} }; }
-        createAnalyser() { return { frequencyBinCount: 128, getByteFrequencyData(data) {
-            for (let i = 0; i < 128; i++) data[i] = context.level === 'quiet' ? 1 : (i < 39 ? 30 : 3);
-        } }; }
+        state = 'running'; sampleRate = 48000; resumeCount = 0;
+        constructor() { contexts.push(this); }
+        async resume() { this.resumeCount++; this.state = 'running'; }
+        async close() { this.state = 'closed'; this.statechange?.(); }
+        addEventListener(event, handler) { this[event] = handler; }
+        createMediaStreamSource(stream) { this.track = stream.getAudioTracks()[0]; return { connect() {}, disconnect() {} }; }
+        createAnalyser() {
+            const audio = this;
+            return {
+                fftSize: 256, frequencyBinCount: 128, minDecibels: -100, maxDecibels: -30,
+                getFloatTimeDomainData(data) { data.fill(audio.track?.zero || context.level === 'zero' ? 0 : context.level === 'quiet' ? 0.001 : 0.1); },
+                getByteFrequencyData(data) {
+                    for (let i = 0; i < 128; i++) data[i] = audio.track?.zero || context.level === 'zero' || context.level === 'below-floor'
+                        ? 0 : context.level === 'quiet' ? 1 : (i < 39 ? 30 : 3);
+                }
+            };
+        }
     };
     for (const file of ['blow-detection.js', 'microphone.js', 'calibration.js']) {
         vm.runInContext(fs.readFileSync(path.join(__dirname, '../js', file), 'utf8'), context);
     }
     let now = 0;
     return {
-        context, element, storage, track, requests: () => requests,
+        context, element, storage, tracks, contexts, get track() { return tracks.at(-1); }, requests: () => requests,
+        pendingFrames: () => frames.size,
         click: id => element(id).handlers.click(),
-        tick(duration) { for (const end = now + duration; now < end; now += 1000 / 60) frame(now); },
+        tick(duration) {
+            for (const end = now + duration; now < end; now += 1000 / 60) {
+                const pending = [...frames.values()]; frames.clear(); pending.forEach(callback => callback(now));
+            }
+        },
         run: code => vm.runInContext(code, context)
     };
 }
@@ -125,11 +150,11 @@ test('corrupt saved JSON falls back safely', () => {
     const instance = app({ saved: '{oops' });
     assert.equal(instance.run('blowProfile.volume'), 35);
 });
-test('disconnected microphone cancels setup and provides retry guidance', async () => {
+test('disconnected microphone shows a retry error without discarding settings', async () => {
     const instance = app();
     await instance.click('calibrate-blowing');
     instance.track.readyState = 'ended'; instance.track.ended();
-    assert.equal(instance.run('calibrationSession'), null);
+    assert.equal(instance.run('calibrationSession.phase'), 'error');
     assert.match(instance.element('microphone-status').textContent, /disconnected/);
 });
 
@@ -224,4 +249,74 @@ test('successful calibration also makes a comparison report available', async ()
     const report = JSON.parse(instance.element('calibration-diagnostics-text').textContent);
     assert.equal(report.outcome, 'Calibration succeeded');
     assert.equal(report.measurements.failedChecks.length, 0);
+});
+
+
+test('all-zero attempt is identified and Try Again replaces the silent capture', async () => {
+    const instance = app({ zeroOnCapture: 1 });
+    await calibrate(instance);
+    assert.match(instance.element('calibration-step-hint').textContent, /stayed at zero/);
+    let report = JSON.parse(instance.element('calibration-diagnostics-text').textContent);
+    assert.equal(report.measurements.blowing.maxWaveformRms, 0);
+    const oldTrack = instance.track, oldContext = instance.contexts.at(-1);
+    const generation = report.microphone.captureGeneration;
+    instance.context.level = 'quiet';
+    await instance.click('calibration-action');
+    assert.notEqual(instance.track, oldTrack);
+    assert.equal(oldTrack.readyState, 'ended');
+    assert.equal(oldContext.state, 'closed');
+    // Late events from the stopped track cannot cancel the replacement.
+    oldTrack.ended(); oldTrack.mute(); oldContext.statechange();
+    instance.tick(3100);
+    assert.equal(instance.element('calibration-action').textContent, 'Ready to Blow?');
+    instance.context.level = 'blow';
+    await instance.click('calibration-action'); instance.tick(9200);
+    assert.equal(instance.element('calibration-action').textContent, 'Done');
+    report = JSON.parse(instance.element('calibration-diagnostics-text').textContent);
+    assert.ok(report.microphone.captureGeneration > generation);
+    assert.ok(report.measurements.blowing.maxWaveformRms > 0);
+    assert.equal(instance.pendingFrames(), 1);
+});
+
+test('recalibrating a live capture creates a fresh stream, context, and one loop', async () => {
+    const instance = app(); await calibrate(instance);
+    const saved = instance.storage.get('breezeEasy.blowProfile.v1');
+    await instance.click('calibration-action');
+    instance.context.level = 'quiet';
+    await instance.click('calibrate-blowing');
+    assert.equal(instance.requests(), 2);
+    assert.equal(instance.tracks[0].readyState, 'ended');
+    assert.equal(instance.contexts[0].state, 'closed');
+    assert.equal(instance.pendingFrames(), 1);
+    instance.click('cancel-calibration');
+    assert.equal(instance.storage.get('breezeEasy.blowProfile.v1'), saved);
+});
+
+test('capture startup interruption is resumed after getUserMedia', async () => {
+    const instance = app({ pauseOnCapture: true });
+    await calibrate(instance);
+    assert.equal(instance.element('calibration-action').textContent, 'Done');
+    assert.ok(instance.contexts.at(-1).resumeCount >= 2);
+});
+
+test('a live track becoming muted is diagnosed and can be replaced', async () => {
+    const instance = app(); await instance.click('calibrate-blowing');
+    const oldTrack = instance.track; oldTrack.muted = true; oldTrack.mute();
+    assert.equal(instance.run('calibrationSession.phase'), 'error');
+    const report = JSON.parse(instance.element('calibration-diagnostics-text').textContent);
+    assert.equal(report.microphone.trackState, 'live');
+    assert.equal(report.microphone.trackMuted, true);
+    await instance.click('calibration-action');
+    assert.notEqual(instance.track, oldTrack);
+    assert.equal(instance.track.muted, false);
+});
+
+test('diagnostics distinguish FFT zeros from a nonzero waveform', async () => {
+    const instance = app(); instance.context.level = 'below-floor';
+    await instance.click('calibrate-blowing'); instance.tick(3100);
+    await instance.click('calibration-action'); instance.tick(9200);
+    const report = JSON.parse(instance.element('calibration-diagnostics-text').textContent);
+    assert.equal(report.measurements.blowing.peak, 0);
+    assert.ok(report.measurements.blowing.maxWaveformRms > 0);
+    assert.equal(instance.storage.size, 0);
 });
