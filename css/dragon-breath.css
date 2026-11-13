@@ -1,0 +1,224 @@
+/* Dragon Breath: a responsive snout, a glowing crystal, and a soft breath trail. */
+#dragon-world {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    isolation: isolate;
+    container-type: size;
+    overflow: hidden;
+    --charge: 0;
+    --dragon-cave-image: url("../images/dragon/cave-mobile-poof-v4.png");
+    background: #061e28;
+}
+
+/* Darken the artwork alone; the dragon, guide and controls stay readable. */
+#dragon-cave-backdrop {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    background: var(--dragon-cave-image) center top / cover no-repeat;
+    filter: brightness(calc(0.24 + var(--charge) * 0.76));
+    transition: filter 900ms ease;
+}
+
+#dragon-cave-light {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 1;
+    background: radial-gradient(ellipse at 50% 25%, #fff4c2e6 0%, #ffd26788 25%, #eac47b22 54%, transparent 78%);
+    mix-blend-mode: screen;
+    opacity: calc(var(--charge) * 0.42);
+    transition: opacity 900ms ease;
+}
+
+#dragon-world.is-lit #dragon-cave-light { opacity: 0.85; }
+
+#dragon-crystal {
+    --charge: 0;
+    position: absolute;
+    top: clamp(90px, 16cqh, 140px);
+    left: 50%;
+    width: min(38vw, 19cqh, 150px);
+    aspect-ratio: 1;
+    transform: translateX(-50%);
+    z-index: 3;
+}
+
+#dragon-crystal::before {
+    content: "";
+    position: absolute;
+    inset: -65%;
+    border-radius: 50%;
+    background: radial-gradient(ellipse, #fffde0 0%, #ffe78b 18%, #ffe6a388 43%, transparent 68%);
+    opacity: calc(0.06 + var(--charge) * 0.85);
+    transform: scale(calc(0.55 + var(--charge) * 0.65));
+    transition: opacity 500ms ease, transform 500ms ease;
+}
+
+#dragon-crystal img {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    filter: brightness(calc(0.6 + var(--charge) * 1.05)) saturate(calc(1 + var(--charge) * 0.35)) drop-shadow(0 0 12px #ffd87588);
+    transition: filter 500ms ease;
+}
+
+#dragon-crystal.is-lit::before {
+    opacity: 1;
+    animation: dragon-crystal-glow 1800ms ease-in-out infinite alternate;
+}
+
+#dragon-crystal::after {
+    content: "";
+    position: absolute;
+    inset: -85%;
+    z-index: -1;
+    border-radius: 50%;
+    background: repeating-conic-gradient(from 10deg, #fff6c95c 0deg 7deg, transparent 7deg 30deg);
+    mask-image: radial-gradient(circle, #000 8%, transparent 69%);
+    opacity: 0;
+    transition: opacity 1000ms ease;
+}
+
+#dragon-crystal.is-lit::after { opacity: 1; animation: dragon-light-rays 24s linear infinite; }
+#dragon-crystal.is-lit img { animation: dragon-crystal-awaken 900ms ease-out both; }
+
+#dragon-snout {
+    position: absolute;
+    left: 50%;
+    bottom: clamp(-60px, -6cqh, -28px);
+    width: min(68vw, 340px, 46cqh);
+    aspect-ratio: 1;
+    transform: translateX(-50%);
+    z-index: 4;
+}
+
+#dragon-snout img { width: 100%; height: 100%; object-fit: contain; }
+
+#dragon-breath-trail { position: absolute; inset: 0; pointer-events: none; z-index: 5; }
+
+.dragon-breath-mote {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: var(--mote-size);
+    height: var(--mote-size);
+    border-radius: 50%;
+    opacity: 0;
+    background: radial-gradient(circle at 40% 35%, #fffdeb 0%, #ffe895 35%, #ffbd5d88 65%, transparent 74%);
+    margin: calc(var(--mote-size) * -0.5);
+    animation: dragon-breath-travel 850ms linear both;
+    animation-delay: var(--mote-delay);
+    will-change: transform, opacity;
+}
+
+.dragon-breath-mote:nth-child(3n) {
+    background: radial-gradient(circle, #fff 0%, #d9f4ffcc 45%, transparent 73%);
+}
+
+.dragon-breath-mote.dragon-breath-mote--sparkle {
+    border-radius: 0;
+    background: linear-gradient(135deg, #fff, #fff5b4 50%, #ffc657);
+    clip-path: polygon(50% 0%, 62% 35%, 100% 50%, 62% 63%, 50% 100%, 37% 63%, 0% 50%, 37% 35%);
+    filter: drop-shadow(0 0 5px #fff6a9);
+    animation-name: dragon-sparkle-travel;
+}
+
+.dragon-breath-mote.dragon-crystal-spark { animation-duration: 1600ms; z-index: 5; }
+
+.dragon-lit-message {
+    position: absolute;
+    top: 49%;
+    left: 50%;
+    transform: translateX(-50%);
+    width: max-content;
+    max-width: 76%;
+    padding: 12px 20px;
+    border: 2px solid #cfb97a;
+    border-radius: 22px;
+    background: #fff9e9f0;
+    color: #294f69;
+    font-size: clamp(1rem, 3vw, 1.5rem);
+    font-weight: bold;
+    text-align: center;
+    z-index: 5;
+}
+
+#activity-screen:has(#dragon-world) #blow-meter {
+    background: #fffaf0e8;
+    padding: 10px 8px;
+    border-radius: 999px;
+    border: 1px solid #b9d2df;
+}
+
+#activity-screen:has(#dragon-world) .meter-dot { border-color: #657e98; box-shadow: none; }
+#activity-screen:has(#dragon-world) .meter-dot.active { background: #f4ca66; border-color: #987639; }
+
+#activity-screen:has(#dragon-world) #test-blow {
+    left: auto;
+    right: 1rem;
+    top: max(94px, calc(env(safe-area-inset-top) + 82px));
+    bottom: auto;
+    transform: none;
+    width: min(25vw, 100px);
+    min-height: 44px;
+    box-sizing: border-box;
+    font-size: 0.75rem;
+    padding: 0.65rem 0.4rem;
+    white-space: nowrap;
+}
+
+@keyframes dragon-breath-travel {
+    0% { transform: translate(var(--from-x), var(--from-y)) scale(0.45); opacity: 0; }
+    10% { opacity: 0.95; }
+    45% { transform: translate(var(--mid-x), var(--mid-y)) scale(1.25); opacity: 0.95; }
+    85% { transform: translate(var(--to-x), var(--to-y)) scale(1.15); opacity: 0.95; }
+    100% { transform: translate(var(--to-x), var(--to-y)) scale(0.2); opacity: 0; }
+}
+
+@keyframes dragon-sparkle-travel {
+    0% { transform: translate(var(--from-x), var(--from-y)) scale(0.4) rotate(0deg); opacity: 0; }
+    12% { opacity: 1; }
+    45% { transform: translate(var(--mid-x), var(--mid-y)) scale(1.4) rotate(90deg); opacity: 1; }
+    85% { transform: translate(var(--to-x), var(--to-y)) scale(1.1) rotate(160deg); opacity: 1; }
+    100% { transform: translate(var(--to-x), var(--to-y)) scale(0.1) rotate(180deg); opacity: 0; }
+}
+
+@keyframes dragon-crystal-awaken {
+    0% { transform: scale(1); }
+    45% { transform: scale(1.14); }
+    100% { transform: scale(1.05); }
+}
+
+@keyframes dragon-light-rays { to { transform: rotate(360deg); } }
+
+@keyframes dragon-crystal-glow {
+    from { transform: scale(1.1); }
+    to { transform: scale(1.35); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    #dragon-crystal.is-lit::before { animation: none; transform: scale(1.2); }
+    #dragon-crystal.is-lit::after, #dragon-crystal.is-lit img { animation: none; }
+    .dragon-breath-mote { animation-name: dragon-breath-travel; }
+    .dragon-breath-mote.dragon-breath-mote--sparkle { animation-name: dragon-breath-travel; }
+}
+
+/* Keep the guide in a separate upper-left space on phones, clear of the head. */
+#activity-screen:has(#dragon-world) #activity-poof {
+    top: max(106px, calc(env(safe-area-inset-top) + 94px));
+    bottom: auto;
+    left: max(12px, env(safe-area-inset-left));
+}
+
+#activity-screen:has(#dragon-world) #activity-poof .poof-character-small {
+    width: clamp(60px, 16vw, 84px);
+}
+
+/* Portrait artwork is the default. Use the wide composition for landscape. */
+@media (min-aspect-ratio: 1/1) {
+    #dragon-world { --dragon-cave-image: url("../images/dragon/cave-wide-poof-v4.png"); }
+}

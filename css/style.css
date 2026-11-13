@@ -720,53 +720,6 @@ body {
 }
 
 /* =====================================================
-   BUBBLE CLOUDS
-   ===================================================== */
-
-.bubble-cloud {
-    position: absolute;
-
-    width: clamp(90px, 24vw, 140px);
-    height: clamp(36px, 9vw, 54px);
-
-    border-radius: 999px;
-    background: rgba(255,255,255,0.65);
-    z-index: 1;
-}
-
-.bubble-cloud::before,
-.bubble-cloud::after {
-    content: "";
-    position: absolute;
-    border-radius: 50%;
-    background: inherit;
-}
-
-.bubble-cloud::before {
-    width: clamp(42px, 11vw, 64px);
-    height: clamp(42px, 11vw, 64px);
-    left: 18px;
-    top: -24px;
-}
-
-.bubble-cloud::after {
-    width: clamp(50px, 13vw, 74px);
-    height: clamp(50px, 13vw, 74px);
-    right: 12px;
-    top: -34px;
-}
-
-.bubble-cloud-left {
-    left: 8%;
-    top: 18%;
-}
-
-.bubble-cloud-right {
-    right: 10%;
-    top: 28%;
-}
-
-/* =====================================================
    RACECAR WORLD
    ===================================================== */
 
@@ -1476,4 +1429,9 @@ body {
 /* The race uses its own overhead meadow rather than the shared mountain scene. */
 #racecar-world {
     background: #a7f3ad url("../images/racecar/racecar-background.png") center / 100% 100% no-repeat;
+}
+
+/* A pale halo follows the complete animated Poof silhouette in every activity. */
+#activity-poof .poof-character {
+    filter: drop-shadow(0 0 3px #fffef5) drop-shadow(0 0 9px #fff9eddd);
 }

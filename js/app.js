@@ -40,6 +40,7 @@ const celebrationMessage = document.getElementById("celebration-message"); // Ce
    ACTIVITY STATE
    ===================================================== */
 
+let activityScreenSession = 0; // Invalidates delayed callbacks when screens change.
 let currentActivity = null;                                                // Tracks current activity
 let blowCount = 0;                                                         // Tracks completed blows
 let requiredBlows = 5;                                                     // Tracks needed blows
@@ -64,7 +65,7 @@ const blowingReminder = createBlowingReminder({
 });
 function updateBlowingHelp(now) {
     const playing = activityScreen.classList.contains("active-screen") &&
-        (currentActivity === "bubbles" ||
+        (currentActivity === "bubbles" || currentActivity === "dragon" ||
             (currentActivity === "racecar" && ["racing", "finishing"].includes(racecarPhase)));
     const speaking = isPoofSpeaking();
     blowingReminder.update(now, playing && !document.hidden && !speaking &&
@@ -140,6 +141,9 @@ async function speakActivityInstruction(message, activity) {
 }
 
 function showScreen(screenToShow) {
+    activityScreenSession++;
+    stopCelebrationSparkles();
+    stopDragonActivity();
     activeBlowDetector.reset();
     blowingReminder.reset();
     menuScreen.classList.remove("active-screen");                          // Hides menu
@@ -237,9 +241,6 @@ function startRacecarActivity() {
 function loadBubbleActivity() {
     activityArea.innerHTML = `
         <div id="bubble-world">
-
-            <div class="bubble-cloud bubble-cloud-left"></div>
-            <div class="bubble-cloud bubble-cloud-right"></div>
 
             <div id="bubble-container"></div>
 
@@ -582,7 +583,10 @@ function handleBubbleBlow(blowStrength = 45) {
     if (blowCount >= requiredBlows) {
         blowingReminder.reset();
         currentActivity = "celebrating";                                   // Prevents extra blows
-        setTimeout(showActivityCelebration, 2000);                         // Starts celebration
+        const session = activityScreenSession;
+        setTimeout(() => {
+            if (session === activityScreenSession && currentActivity === "celebrating") showActivityCelebration();
+        }, 2000);                         // Starts celebration
     }
 }
 
@@ -598,6 +602,11 @@ function handleBlow(blowStrength = 45) {
         return;
     }
 
+    if (currentActivity === "dragon") {
+        handleDragonBlow(blowStrength);
+        return;
+    }
+
     if (currentActivity === "racecar") {
         handleRacecarBlow(blowStrength);                                   // Sends blow to racecar
         return;
@@ -609,6 +618,8 @@ function handleBlow(blowStrength = 45) {
    ===================================================== */
 
 function showActivityCelebration() {
+    if (currentActivity !== "celebrating") return;
+    const session = activityScreenSession;
     const activityPoof = document.getElementById("activity-poof");          // Gets activity Poof
 
     if (activityPoof) {
@@ -621,6 +632,7 @@ function showActivityCelebration() {
     speakMessage(message);                                                  // Audio only
 
     setTimeout(() => {
+        if (session !== activityScreenSession || currentActivity !== "celebrating") return;
         if (activityPoof) {
             activityPoof.classList.remove("poof-center-celebration");       // Resets Poof
         }
@@ -637,6 +649,8 @@ function showActivityCelebration() {
    ===================================================== */
 
 function showRacecarCelebration() {
+    if (currentActivity !== "racecar" || racecarPhase !== "celebrating") return;
+    const session = activityScreenSession;
     const activityPoof = document.getElementById("activity-poof");         // Gets activity Poof
 
     if (activityPoof) {
@@ -649,6 +663,7 @@ function showRacecarCelebration() {
     speakMessage(message);                                                 // Audio only
 
     setTimeout(() => {
+        if (session !== activityScreenSession || currentActivity !== "racecar" || racecarPhase !== "celebrating") return;
 
         if (activityPoof) {
             activityPoof.classList.remove("poof-center-celebration");
@@ -728,6 +743,10 @@ activityCards.forEach(card => {
 
         if (activityName === "bubbles") {
             startBubbleActivity();                                                 // Starts bubbles
+        }
+
+        if (activityName === "dragon") {
+            startDragonActivity();
         }
 
         if (activityName === "racecar") {
@@ -838,3 +857,153 @@ settingsModal.addEventListener("keydown", event => {
 });
 
 /* Activity instructions start capture before speech, from the activity tap. */
+
+/* =====================================================
+   DRAGON BREATH — LIGHT THE CRYSTAL
+   ===================================================== */
+let dragonSession = 0;
+let dragonAcceptedBlows = 0;
+let dragonCrystalHits = 0;
+const dragonTimers = new Set();
+
+function stopDragonActivity() {
+    dragonSession++;
+    dragonTimers.forEach(clearTimeout);
+    dragonTimers.clear();
+    dragonAcceptedBlows = 0;
+    dragonCrystalHits = 0;
+    document.getElementById("dragon-world")?.classList.remove("is-lit");
+    document.getElementById("activity-poof")?.classList.remove("poof-center-celebration");
+}
+
+function dragonLater(callback, delay) {
+    const session = dragonSession;
+    const timer = setTimeout(() => {
+        dragonTimers.delete(timer);
+        if (session !== dragonSession || !["dragon", "dragon-finishing", "dragon-celebrating"].includes(currentActivity)) return;
+        // Hold rewards and the return-to-menu while a parent is in settings.
+        if (document.hidden || settingsModal.style.display === "flex" || calibrationSession) {
+            dragonLater(callback, 200);
+            return;
+        }
+        callback();
+    }, delay);
+    dragonTimers.add(timer);
+}
+
+function startDragonActivity() {
+    showScreen(activityScreen); // Also cancels any previous dragon session.
+    currentActivity = "dragon";
+    requiredBlows = 5;
+    resetMeter();
+    activityArea.innerHTML = `
+        <div id="dragon-world">
+            <div id="dragon-cave-backdrop" aria-hidden="true"></div>
+            <div id="dragon-cave-light" aria-hidden="true"></div>
+            <div id="dragon-crystal"><img src="images/dragon/golden-gem-poof-v4.png" alt="Magic crystal"></div>
+            <div id="dragon-breath-trail" aria-hidden="true"></div>
+            <div id="dragon-snout"><img src="images/dragon/purple-head-v3.png" alt="Your purple dragon head viewed from above"></div>
+            <div class="dragon-lit-message" id="dragon-lit-message" role="status" hidden></div>
+        </div>`;
+    speakActivityInstruction("Blow gently to light the crystal!", "dragon");
+}
+
+function handleDragonBlow() {
+    if (currentActivity !== "dragon" || dragonAcceptedBlows >= requiredBlows) return;
+    dragonAcceptedBlows++;
+    createDragonBreath();
+    if (dragonAcceptedBlows === requiredBlows) {
+        currentActivity = "dragon-finishing";
+        blowingReminder.reset();
+    }
+    // Brighten the target when the leading breath has actually reached it.
+    dragonLater(() => {
+        dragonCrystalHits++;
+        blowCount = dragonCrystalHits;
+        updateMeter();
+        const crystal = document.getElementById("dragon-crystal");
+        if (!crystal) return;
+        crystal.style.setProperty("--charge", dragonCrystalHits / requiredBlows);
+        document.getElementById("dragon-world")?.style.setProperty("--charge", dragonCrystalHits / requiredBlows);
+        if (dragonCrystalHits === requiredBlows) {
+            currentActivity = "dragon-celebrating";
+            blowingReminder.reset();
+            crystal.classList.add("is-lit");
+            document.getElementById("dragon-world")?.classList.add("is-lit");
+            createDragonCrystalSparkles();
+            const message = document.getElementById("dragon-lit-message");
+            message.textContent = "You lit the crystal!";
+            message.hidden = false;
+            speakMessage("You lit the crystal! Great dragon breaths!");
+            // Allow the 900 ms light-up to finish, then hold the celebration.
+            dragonLater(() => {
+                if (currentActivity !== "dragon-celebrating" || dragonCrystalHits !== requiredBlows) return;
+                cancelPoofSpeech();
+                currentActivity = null;
+                resetMeter();
+                showScreen(menuScreen);
+            }, 4000);
+        }
+    }, 850);
+}
+
+function setDragonMotePath(mote, bounds, fromX, fromY, toX, toY, bend = 0) {
+    const set = (name, value, length, unit) => mote.style.setProperty(name, `${value / length * 100}${unit}`);
+    set("--from-x", fromX, bounds.width, "cqw");
+    set("--from-y", fromY, bounds.height, "cqh");
+    set("--mid-x", (fromX + toX) / 2 + bend, bounds.width, "cqw");
+    set("--mid-y", (fromY + toY) / 2, bounds.height, "cqh");
+    set("--to-x", toX, bounds.width, "cqw");
+    set("--to-y", toY, bounds.height, "cqh");
+}
+
+function createDragonBreath() {
+    const world = document.getElementById("dragon-world");
+    const snout = document.getElementById("dragon-snout");
+    const crystal = document.getElementById("dragon-crystal");
+    const trail = document.getElementById("dragon-breath-trail");
+    if (!world || !snout || !crystal || !trail) return;
+    const bounds = world.getBoundingClientRect();
+    if (!bounds.width || !bounds.height) return;
+    const nose = snout.getBoundingClientRect();
+    const target = crystal.getBoundingClientRect();
+    // A broad, overlapping plume plus star glints; no stop/start particle loop.
+    for (let i = 0; i < 64; i++) {
+        const sparkle = i >= 40;
+        const mote = document.createElement("span");
+        mote.className = "dragon-breath-mote" + (sparkle ? " dragon-breath-mote--sparkle" : "");
+        const fromX = nose.left - bounds.left + nose.width * (i % 2 ? 0.55 : 0.45);
+        const fromY = nose.top - bounds.top + nose.height * 0.24;
+        const toX = target.left - bounds.left + target.width * (0.42 + Math.random() * 0.16);
+        const toY = target.top - bounds.top + target.height * 0.38;
+        const bend = (Math.random() - 0.5) * Math.min(100, bounds.width * 0.25);
+        setDragonMotePath(mote, bounds, fromX, fromY, toX, toY, bend);
+        mote.style.setProperty("--mote-size", `${sparkle ? 13 + Math.random() * 17 : 32 + Math.random() * 32}px`);
+        mote.style.setProperty("--mote-delay", `${sparkle ? (i - 40) * 25 : i * 16}ms`);
+        trail.appendChild(mote);
+        dragonLater(() => mote.remove(), 1800);
+    }
+}
+
+function createDragonCrystalSparkles() {
+    const world = document.getElementById("dragon-world");
+    const crystal = document.getElementById("dragon-crystal");
+    const trail = document.getElementById("dragon-breath-trail");
+    if (!world || !crystal || !trail) return;
+    const bounds = world.getBoundingClientRect();
+    if (!bounds.width || !bounds.height) return;
+    const target = crystal.getBoundingClientRect();
+    const x = target.left - bounds.left + target.width * 0.5;
+    const y = target.top - bounds.top + target.height * 0.38;
+    for (let i = 0; i < 28; i++) {
+        const star = document.createElement("span");
+        star.className = "dragon-breath-mote dragon-breath-mote--sparkle dragon-crystal-spark";
+        const angle = i / 28 * Math.PI * 2;
+        const radius = Math.min(bounds.width * 0.36, 145) * (0.6 + Math.random() * 0.4);
+        setDragonMotePath(star, bounds, x, y, x + Math.cos(angle) * radius, y + Math.sin(angle) * radius);
+        star.style.setProperty("--mote-size", `${14 + Math.random() * 16}px`);
+        star.style.setProperty("--mote-delay", `${i % 7 * 70}ms`);
+        trail.appendChild(star);
+        dragonLater(() => star.remove(), 2300);
+    }
+}
