@@ -24,7 +24,7 @@
 
 /* Warm, quiet scenery gives cyan Poof and the red car clear contrast. */
 #racecar-world {
-    background: #f7e6bc url("../images/racecar/racecar-scene-v4.png") center / 100% 100% no-repeat;
+    background: #f7e6bc url("../images/racecar/racecar-scene-v4.png") center / cover no-repeat;
 }
 
 #activity-screen:has(#racecar-world) #blow-meter {
