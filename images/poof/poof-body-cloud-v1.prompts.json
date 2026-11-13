@@ -1,0 +1,18 @@
+{
+  "generator": "built-in image generator",
+  "exportCanvas": [
+    1200,
+    1600
+  ],
+  "assets": [
+    {
+      "path": "poof-body-balanced-v1.png",
+      "prompt": "Precise minimal retouch of the supplied BODY-LAYER PNG. This is an intentionally incomplete body sprite for a layered dragon character. DO NOT add a head, face, eyes, wings, horns, tail or any other parts. The character must NOT be redesigned. Keep the original transparent canvas at exactly 1200 x 1600 if possible, with the original large empty transparent area above the body, and keep the body at its existing position and scale. Preserve the exact cyan skin, dark royal-blue chest patch, chest shape, neck silhouette, black line color and line thickness, original style and original anatomy. Change ONLY the lower feet/ankle area: subtly smooth the slightly wobbly edges and make the seated feet balanced, with the left and right front toe tips resting on the same gentle horizontal seating line around y=1200; similarly make the two outer feet feel evenly supported. Preserve the original toe count, chunky rounded toes and leg shapes, making only small corrections, not a perfect mirrored redesign. The upper chest/neck (everything above roughly y=1020) must remain visually unchanged. Keep the cloud OUT of this body image; it will be a separate layer. Background genuinely transparent; no checkerboard, no shadows outside the sprite, no text. This is a very slight cleanup and balancing pass, not a new illustration."
+    },
+    {
+      "path": "poof-seat-cloud-v1.png",
+      "prompt": "Create a separate transparent PNG support CLOUD LAYER for the supplied existing layered baby-dragon body. The body image is a PLACEMENT AND STYLE REFERENCE ONLY: do not include any dragon/body/feet/animal pixels in the final cloud layer. Output only one gentle fluffy sitting cloud on a genuinely transparent portrait canvas, ideally 1200 x 1600 to match the reference canvas. Keep the entire upper 70 percent of the canvas transparent and empty. Position a wide low cushion-shaped cloud centered at x=600, approximately spanning x=170 to x=1050 and y=1175 to y=1370, so the reference dragon's feet at y=1200 would rest slightly overlapping its soft top surface when layered above it. It should look like a cozy cloud seat, wider than the dragon's two front feet, made of a few soft rounded puffs with a relatively calm supporting top, warm cream-white fill, very subtle pale lavender underside shading and a clean medium blue outline matching the cute mountain/cloud artwork used in this app. No cloud face, no eyes, no limbs, no objects, no dragon, no background/sky, no drop shadow outside the cloud, no text, no checkerboard. Do not crop the transparent canvas around the cloud: preserve a full portrait character-alignment canvas, with the cloud down near the bottom quarter."
+    }
+  ],
+  "notes": "Artwork was exported to the existing 1200x1600 transparent alignment canvas. The cloud is a separate bottom layer; CSS controls its seating offset."
+}

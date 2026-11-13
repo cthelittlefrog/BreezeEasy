@@ -15,25 +15,19 @@
 
     <section id="menu-screen" class="screen active-screen">
 
-        <!-- Sky Decorations -->
-        <div class="sky-background">
-            <div class="cloud cloud-1"></div>
-            <div class="cloud cloud-2"></div>
-            <div class="cloud cloud-3"></div>
-
-            <div class="mountains"></div>
-        </div>
+        <div class="sky-background" aria-hidden="true"></div>
 
         <!-- Poof Character -->
-        <div id="poof-container">
+        <div id="poof-container" role="img" aria-label="Poof, a friendly blue dragon sitting on a cloud">
             <div class="poof-character">
 
+                <img class="poof-layer poof-seat-cloud" src="images/poof/poof-seat-cloud-v1.png" alt="">
                 <img class="poof-layer poof-tail" id="poof-tail" src="images/poof/poof-tail-1.png" alt="">
 
                 <img class="poof-layer poof-left-wing" src="images/poof/poof-left-wing.png" alt="">
                 <img class="poof-layer poof-right-wing" src="images/poof/poof-right-wing.png" alt="">
 
-                <img class="poof-layer poof-body" src="images/poof/poof-body.png" alt="">
+                <img class="poof-layer poof-body" src="images/poof/poof-body-balanced-v1.png" alt="">
                 <img class="poof-layer poof-head" src="images/poof/poof-head.png" alt="">
 
                 <img class="poof-layer poof-left-ear" src="images/poof/poof-left-ear.png" alt="">
@@ -53,22 +47,22 @@
              ACTIVITY GRID
              ===================================================== -->
 
-        <section class="activity-grid">
+        <section class="activity-grid" aria-label="Activities">
 
             <button class="activity-card" data-activity="bubbles">
-                <img src="images/activities/bubbles3.png" alt="Bubbles">
+                <img src="images/activities/bubbles-poof-v1.webp" alt="Bubbles" width="768" height="768" decoding="async">
             </button>
 
             <button class="activity-card" data-activity="racecar">
-                <img src="images/activities/racecar2.png" alt="Racecar">
+                <img src="images/activities/racecar-poof-v1.webp" alt="Racecar" width="768" height="768" decoding="async">
             </button>
 
             <button class="activity-card" data-activity="dragon">
-                <img src="images/activities/dragonbreath2.png" alt="Dragon">
+                <img src="images/activities/dragon-breath-poof-v1.webp" alt="Dragon Breath" width="768" height="768" decoding="async">
             </button>
 
             <button class="activity-card" data-activity="balloon">
-                <img src="images/activities/balloon3.png" alt="Balloon">
+                <img src="images/activities/balloon-poof-v1.webp" alt="Balloon" width="768" height="768" decoding="async">
             </button>
 
         </section>
@@ -113,10 +107,11 @@
         <div id="activity-poof">
 
             <div class="poof-character poof-character-small">
+                <img class="poof-layer poof-seat-cloud" src="images/poof/poof-seat-cloud-v1.png" alt="">
                 <img class="poof-layer poof-tail animated-tail" src="images/poof/poof-tail-1.png" alt="">
                 <img class="poof-layer poof-left-wing" src="images/poof/poof-left-wing.png" alt="">
                 <img class="poof-layer poof-right-wing" src="images/poof/poof-right-wing.png" alt="">
-                <img class="poof-layer poof-body" src="images/poof/poof-body.png" alt="">
+                <img class="poof-layer poof-body" src="images/poof/poof-body-balanced-v1.png" alt="">
                 <img class="poof-layer poof-left-ear" src="images/poof/poof-left-ear.png" alt="">
                 <img class="poof-layer poof-right-ear" src="images/poof/poof-right-ear.png" alt="">
                 <img class="poof-layer poof-head" src="images/poof/poof-head.png" alt="">
@@ -155,10 +150,11 @@
             <div id="celebration-poof">
 
                 <div class="poof-character poof-character-large">
+                    <img class="poof-layer poof-seat-cloud" src="images/poof/poof-seat-cloud-v1.png" alt="">
                     <img class="poof-layer poof-tail animated-tail" src="images/poof/poof-tail-1.png" alt="">
                     <img class="poof-layer poof-left-wing" src="images/poof/poof-left-wing.png" alt="">
                     <img class="poof-layer poof-right-wing" src="images/poof/poof-right-wing.png" alt="">
-                    <img class="poof-layer poof-body" src="images/poof/poof-body.png" alt="">
+                    <img class="poof-layer poof-body" src="images/poof/poof-body-balanced-v1.png" alt="">
                     <img class="poof-layer poof-left-ear" src="images/poof/poof-left-ear.png" alt="">
                     <img class="poof-layer poof-right-ear" src="images/poof/poof-right-ear.png" alt="">
                     <img class="poof-layer poof-head" src="images/poof/poof-head.png" alt="">
@@ -178,7 +174,7 @@
     <!-- Parent Settings: hold to open, with visible feedback. -->
     <button id="settings-trigger" type="button" aria-label="Parent Settings (hold for 3 seconds)">
         <span class="settings-cloud" aria-hidden="true">☁️</span>
-        <span class="settings-hold-label">Hold 3-seconds</span>
+        <span class="settings-hold-label">Hold 3s</span>
         <span class="settings-hold-track" aria-hidden="true"><span></span></span>
     </button>
 

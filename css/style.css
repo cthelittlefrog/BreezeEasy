@@ -1194,169 +1194,8 @@ body {
     }
 }
 
-/* =====================================================
-   SKY BACKGROUND CONTAINER
-   ===================================================== */
-
-.sky-background {
-    position: absolute;
-    inset: 0;
-    pointer-events: none;
-    overflow: hidden;
-    z-index: 0;
-}
-
-#menu-screen > .app-header,
-#menu-screen > .activity-grid,
-#menu-screen > #settings-trigger {
-    position: relative;
-    z-index: 1;
-}
-
-/* =====================================================
-   CLOUDS
-   ===================================================== */
-
-.cloud {
-    position: absolute;
-
-    height: clamp(28px, 5vw, 48px);
-
-    border-radius: 999px;
-
-    background: rgba(255, 255, 255, 0.42);
-
-    animation: cloudDrift linear infinite;
-}
-
-.cloud::before,
-.cloud::after {
-    content: "";
-    position: absolute;
-    border-radius: 50%;
-    background: inherit;
-}
-
-.cloud::before {
-    width: 55%;
-    height: 160%;
-    left: 15%;
-    top: -50%;
-}
-
-.cloud::after {
-    width: 65%;
-    height: 190%;
-    right: 12%;
-    top: -70%;
-}
-
-.cloud-1 {
-    width: clamp(80px, 14vw, 140px);
-    top: 8%;
-    left: -12%;
-    animation-duration: 90s;
-    animation-delay: 0s;
-    opacity: 0.5;
-}
-
-.cloud-2 {
-    width: clamp(60px, 10vw, 110px);
-    top: 18%;
-    left: -8%;
-    animation-duration: 120s;
-    animation-delay: -40s;
-    opacity: 0.35;
-}
-
-.cloud-3 {
-    width: clamp(50px, 8vw, 90px);
-    top: 6%;
-    left: -6%;
-    animation-duration: 75s;
-    animation-delay: -20s;
-    opacity: 0.28;
-}
-
-@keyframes cloudDrift {
-    0%   { transform: translateX(0); }
-    100% { transform: translateX(115vw); }
-}
-
-/* =====================================================
-   MOUNTAINS
-   ===================================================== */
-
-.mountains {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
-
-    height: clamp(90px, 22vh, 200px);
-
-    background-image:
-            radial-gradient(
-                    ellipse 6% 8% at 54% 88%,
-                    rgba(255, 210, 100, 0.55),
-                    transparent 70%
-            );
-}
-
-.mountains::before {
-    content: "";
-    position: absolute;
-    inset: 0;
-
-    background: var(--mountain-light);
-
-    clip-path: polygon(
-            0% 100%,
-            0% 55%,
-            8% 38%,
-            16% 52%,
-            26% 28%,
-            36% 48%,
-            46% 20%,
-            56% 44%,
-            66% 30%,
-            76% 50%,
-            86% 22%,
-            94% 42%,
-            100% 32%,
-            100% 100%
-    );
-
-    opacity: 0.7;
-}
-
-.mountains::after {
-    content: "";
-    position: absolute;
-    inset: 0;
-
-    background: var(--mountain-dark);
-
-    clip-path: polygon(
-            0% 100%,
-            0% 70%,
-            10% 45%,
-            20% 65%,
-            32% 35%,
-            42% 58%,
-            50% 42%,
-            52% 72%,
-            54% 75%,
-            56% 75%,
-            58% 72%,
-            60% 42%,
-            70% 60%,
-            80% 38%,
-            90% 62%,
-            100% 48%,
-            100% 100%
-    );
-}
+/* The illustrated mountain scene is shared by the menu and activity worlds. */
+.sky-background { position: absolute; inset: 0; pointer-events: none; z-index: -1; }
 
 /* =====================================================
    ACTIVITY CELEBRATION POOF
@@ -1579,14 +1418,14 @@ body {
 /* Clear parent access and a quiet reminder when blowing is not registering. */
 #settings-trigger {
     display: flex; flex-direction: column; align-items: center; justify-content: center;
-    gap: 2px; width: 120px; height: 76px; padding: 6px 10px 10px;
+    gap: 2px; width: 68px; height: 64px; padding: 6px;
     border: 1px solid #ffffffb3; border-radius: 20px;
     background: #fffffff0; color: #254d59;
     box-shadow: 0 3px 12px #24556418;
 }
-.settings-cloud { font-size: 1.6rem; line-height: 1; pointer-events: none; }
-.settings-hold-label { font: 600 12px/1.4 system-ui, sans-serif; white-space: nowrap; pointer-events: none; }
-.settings-hold-track { width: 72px; height: 4px; border-radius: 4px; background: #d8eaed; overflow: hidden; pointer-events: none; }
+.settings-cloud { font-size: 1.4rem; line-height: 1; pointer-events: none; }
+.settings-hold-label { font: 600 11px/1.4 system-ui, sans-serif; white-space: nowrap; pointer-events: none; }
+.settings-hold-track { width: 42px; height: 3px; border-radius: 4px; background: #d8eaed; overflow: hidden; pointer-events: none; }
 .settings-hold-track > span { display: block; height: 100%; background: #287d86; transform: scaleX(0); transform-origin: left; }
 #settings-trigger.is-holding .settings-hold-track > span { transform: scaleX(1); transition: transform 3s linear; }
 #settings-trigger:focus-visible { outline: 3px solid #166879; outline-offset: 3px; }
@@ -1604,4 +1443,132 @@ body {
 #blowing-help[hidden] { display: none; }
 @media (prefers-reduced-motion: reduce) {
     #settings-trigger.is-holding .settings-hold-track > span { transition: none; }
+}
+
+/* =====================================================
+   POOF VISUAL REFRESH — illustration, type, spacing, controls
+   ===================================================== */
+:root {
+    --poof-ink: #163e59;
+    --poof-blue: #087ca9;
+    --poof-cyan: #02b6ec;
+    --poof-paper: #fffef8;
+    --poof-line: #c5e1eb;
+    --poof-scene: url("../images/backgrounds/poof-mountains-mobile-v1.webp");
+    --card-radius: 28px;
+    --shadow-soft: 0 8px 24px #163e591c;
+}
+body {
+    color: var(--poof-ink);
+    background-color: #d6f3ff;
+    background-image: var(--poof-scene);
+    background-position: center bottom;
+    background-size: cover;
+    background-repeat: no-repeat;
+    -webkit-tap-highlight-color: transparent;
+}
+#menu-screen.active-screen {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(120px, 1fr) auto;
+    align-items: center;
+    justify-items: center;
+    gap: clamp(10px, 2dvh, 20px);
+    padding: calc(60px + env(safe-area-inset-top))
+             max(20px, env(safe-area-inset-right))
+             calc(36px + env(safe-area-inset-bottom))
+             max(20px, env(safe-area-inset-left));
+    isolation: isolate;
+    overflow-y: auto;
+}
+#poof-container, #poof-container.menu-poof {
+    position: relative;
+    z-index: 1;
+    width: clamp(150px, 42vw, 200px);
+    margin: 0;
+    filter: drop-shadow(0 10px 9px #244f661c);
+}
+.activity-grid {
+    position: relative;
+    z-index: 1;
+    width: min(78vw, 360px, calc((100dvh - 300px) * 0.8));
+    max-width: 100%;
+    gap: clamp(10px, 2.7vw, 16px);
+    margin: 0 auto;
+    padding: 0;
+}
+.activity-card {
+    border: 3px solid var(--poof-paper);
+    border-radius: var(--card-radius);
+    background: var(--poof-paper);
+    box-shadow: 0 5px 0 #3b739f35, 0 10px 22px #163e5924;
+    transition: transform 160ms ease, box-shadow 160ms ease;
+    touch-action: manipulation;
+}
+.activity-card img { border-radius: calc(var(--card-radius) - 5px); }
+.activity-card:hover { transform: none; }
+@media (hover: hover) and (pointer: fine) {
+    .activity-card:hover { transform: translateY(-4px); box-shadow: 0 7px 0 #3b739f35, 0 15px 28px #163e5929; }
+}
+.activity-card:active { transform: translateY(3px) scale(0.98); box-shadow: 0 1px 0 #3b739f35, 0 4px 10px #163e591c; }
+.activity-card:focus-visible, #back-button:focus-visible, #test-blow:focus-visible {
+    outline: 3px solid var(--poof-ink); outline-offset: 5px;
+}
+#bubble-world, #racecar-world, #dragon-world, #balloon-world {
+    background: linear-gradient(#effaff24, #effaff24), var(--poof-scene) center bottom / cover no-repeat;
+}
+#settings-trigger {
+    border: 2px solid #c5e1eb;
+    background: var(--poof-paper);
+    color: var(--poof-ink);
+    border-radius: 18px;
+    box-shadow: 0 4px 0 #80b5cc2e, 0 8px 18px #163e5912;
+}
+.settings-hold-track { background: #d9edf4; }
+.settings-hold-track > span { background: var(--poof-blue); }
+.settings-panel {
+    border: 2px solid var(--poof-line);
+    border-radius: 28px;
+    background: var(--poof-paper);
+    box-shadow: 0 20px 70px #163e5938;
+    color: var(--poof-ink);
+}
+.settings-panel h2 { font-size: 1.55rem; line-height: 1.2; letter-spacing: -0.025em; }
+.calibration-controls button, #close-settings, #back-button, #test-blow {
+    min-height: 48px;
+    border: 2px solid var(--poof-line);
+    border-radius: 16px;
+    color: var(--poof-ink);
+    background: var(--poof-paper);
+    font: inherit;
+    font-weight: 600;
+    box-shadow: 0 3px 0 #163e5912;
+}
+#calibrate-blowing, #close-settings, #calibration-dialog #calibration-action {
+    background: var(--poof-blue); border-color: var(--poof-blue); color: white;
+}
+#calibration-dialog { background: var(--poof-paper); border: 2px solid var(--poof-line); color: var(--poof-ink); }
+#calibration-dialog .calibration-cancel { color: var(--poof-ink); }
+@media (min-aspect-ratio: 1/1) {
+    :root { --poof-scene: url("../images/backgrounds/poof-mountains-v1.webp"); }
+}
+@media (max-height: 680px) {
+    #menu-screen.active-screen { gap: 10px; padding-top: calc(50px + env(safe-area-inset-top)); padding-bottom: calc(24px + env(safe-area-inset-bottom)); }
+    #poof-container, #poof-container.menu-poof { width: clamp(120px, 36vw, 150px); }
+    .activity-grid { width: min(80vw, 320px, calc((100dvh - 230px) * 0.82)); gap: 10px; }
+}
+@media (max-height: 460px) and (min-width: 600px) {
+    #menu-screen.active-screen { grid-template-columns: minmax(180px, 0.8fr) minmax(260px, 1.2fr); grid-template-rows: 1fr; align-content: center; gap: 8px 24px; padding-left: max(28px, env(safe-area-inset-left)); padding-right: max(96px, env(safe-area-inset-right)); }
+    #poof-container { grid-column: 1; grid-row: 1; }
+    .activity-grid { grid-column: 2; grid-row: 1; width: min(100%, 330px, calc((100dvh - 60px) * 0.95)); margin: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .activity-card { transition: none; }
+}
+
+/* A separate cloud seat follows Poof's existing layered animation. */
+.poof-seat-cloud {
+    z-index: 0;
+    transform-origin: 50% 76%;
+    transform: translateY(-4.5%) scale(1.4);
 }
