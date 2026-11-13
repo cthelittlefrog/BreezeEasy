@@ -4,7 +4,7 @@ const vm = require('node:vm');
 const fs = require('node:fs');
 const path = require('node:path');
 
-function app({ saved, blockedStorage = false, denied = false, zeroOnCapture = 0, pauseOnCapture = false, fullApp = false, hangResume = false, hangCapture = false } = {}) {
+function app({ saved, blockedStorage = false, denied = false, zeroOnCapture = 0, pauseOnCapture = false, fullApp = false, hangResume = false, hangCapture = false, ios = false } = {}) {
     const elements = new Map();
     const storage = new Map(saved ? [['breezeEasy.blowProfile.v1', saved]] : []);
     const frames = new Map(), tracks = [], contexts = [], timers = new Map(), lateCaptures = [];
@@ -15,7 +15,7 @@ function app({ saved, blockedStorage = false, denied = false, zeroOnCapture = 0,
             elements.set(id, {
             classList: { add: key => classes.add(key), remove: key => classes.delete(key), contains: key => classes.has(key) },
             querySelectorAll() { return []; },
-            textContent: '', value: 0, style: {}, handlers: {}, open: false,
+            textContent: '', value: 0, style: { setProperty(key, value) { this[key] = value; } }, handlers: {}, open: false,
             showModal() { this.open = true; }, close() { this.open = false; }, focus() {},
             addEventListener(event, handler) { this.handlers[event] = handler; }
         });
@@ -30,7 +30,7 @@ function app({ saved, blockedStorage = false, denied = false, zeroOnCapture = 0,
         clearTimeout: id => timers.delete(id),
         addEventListener() {},
         document: { hidden: false, getElementById: element, addEventListener() {}, querySelectorAll: () => [] },
-        navigator: { mediaDevices: { getUserMedia: async () => {
+        navigator: { userAgent: ios ? 'Mozilla/5.0 (iPhone) AppleWebKit/605.1.15 Version/18.0 Mobile Safari/604.1' : '', mediaDevices: { getUserMedia: async () => {
             requests++;
             if (context.denied) throw Object.assign(new Error('denied'), { name: 'NotAllowedError' });
             const track = {
@@ -176,7 +176,7 @@ test('blocked storage still permits session calibration', async () => {
 });
 test('corrupt saved JSON falls back safely', () => {
     const instance = app({ saved: '{oops' });
-    assert.equal(instance.run('blowProfile.volume'), 35);
+    assert.equal(instance.run('blowProfile.volume'), 7.5);
 });
 test('disconnected microphone shows a retry error without discarding settings', async () => {
     const instance = app();
@@ -430,7 +430,9 @@ test('missing speech callbacks and stuck pending flags cannot suppress play fore
     // Simulate a browser leaving its queue flags set even after cancellation.
     instance.context.speechSynthesis.cancel = () => {};
     instance.context.speechSynthesis.pending = true;
-    instance.tick(8500); await instance.flush();
+    // Let asynchronous input recovery settle after the shorter speech watchdog.
+    instance.tick(3500); await instance.flush();
+    instance.tick(5000); await instance.flush();
     assert.equal(instance.run('isPoofSpeaking()'), false);
     instance.context.level = 'blow'; instance.tick(1000);
     assert.equal(instance.context.rewards, 1);
@@ -451,4 +453,106 @@ test('speech completion keeps the one-breath latch until a quiet release', async
     instance.context.level = 'quiet'; instance.tick(1000);
     instance.context.level = 'blow'; instance.tick(1000);
     assert.equal(instance.context.rewards, 2);
+});
+
+test('iPhone starting settings detect repeated blows in all four activities without calibration', async () => {
+    const instance = app({ fullApp: true, ios: true });
+    instance.element('settings-modal').style.display = 'none';
+    instance.element('voice-toggle').checked = false;
+    instance.run('handleBubbleBlow = handleRacecarBlow = handleDragonBlow = handleBalloonBlow = () => { rewards++; }');
+    for (const start of ['startBubbleActivity()', 'startRacecarActivity()', 'startDragonActivity()', 'startBalloonActivity()']) {
+        const before = instance.context.rewards;
+        instance.context.level = 'quiet';
+        instance.run(start); await instance.flush(); instance.tick(500);
+        instance.context.level = 'blow'; instance.tick(1000);
+        assert.equal(instance.context.rewards, before + 1, start);
+        instance.context.level = 'quiet'; instance.tick(500);
+        instance.context.level = 'blow'; instance.tick(1000);
+        assert.equal(instance.context.rewards, before + 2, start);
+        instance.run('backButton.handlers.click()');
+    }
+    assert.equal(instance.run('hasBlowCalibration'), false);
+    assert.equal(instance.storage.size, 0);
+});
+
+test('iPhone speech recovery replaces silent capture but preserves the one-breath latch', async () => {
+    const instance = app({ ios: true });
+    instance.element('settings-modal').style.display = 'none';
+    await instance.click('enable-microphone'); instance.tick(500);
+    instance.context.level = 'blow'; instance.tick(1000);
+    assert.equal(instance.context.rewards, 1);
+    const oldTrack = instance.track;
+    const finish = instance.run('pauseForPoofSpeech()');
+    oldTrack.zero = true; oldTrack.muted = true; oldTrack.mute();
+    finish(); await instance.flush();
+    assert.equal(oldTrack.readyState, 'ended');
+    assert.notEqual(instance.track, oldTrack);
+    assert.equal(instance.track.muted, false);
+    assert.equal(instance.run('poofSpeechRecovering'), false);
+    instance.tick(1500);
+    assert.equal(instance.context.rewards, 1);
+    instance.context.level = 'quiet'; instance.tick(500);
+    instance.context.level = 'blow'; instance.tick(1000);
+    assert.equal(instance.context.rewards, 2);
+});
+
+test('an interrupted iPhone audio context is rebuilt on an activity microphone request', async () => {
+    const instance = app({ ios: true });
+    await instance.click('enable-microphone');
+    const oldAudio = instance.contexts.at(-1);
+    oldAudio.state = 'interrupted';
+    const ready = await instance.run('startMicrophone()');
+    assert.equal(ready, true);
+    assert.equal(oldAudio.state, 'closed');
+    assert.notEqual(instance.contexts.at(-1), oldAudio);
+    assert.equal(instance.contexts.at(-1).state, 'running');
+});
+
+test('old factory settings migrate to automatic mode and a saved slider change is not a calibration', () => {
+    const instance = app({ saved: JSON.stringify({ version: 1, noise: 5, volume: 35, ratio: 0.45, sensitivity: 85 }) });
+    assert.equal(instance.run('hasBlowCalibration'), false);
+    assert.equal(instance.run('blowProfile.sensitivity'), 85);
+    instance.element('blow-sensitivity').handlers.change();
+    const saved = JSON.parse(instance.storage.get('breezeEasy.blowProfile.v1'));
+    assert.equal(saved.calibrated, false);
+    const restored = app({ saved: JSON.stringify(saved) });
+    assert.equal(restored.run('hasBlowCalibration'), false);
+});
+
+test('a failed activity microphone can be retried without entering calibration', async () => {
+    const instance = app({ denied: true, ios: true });
+    instance.element('settings-modal').style.display = 'none';
+    await instance.click('enable-microphone');
+    assert.equal(instance.element('activity-microphone-retry').hidden, false);
+    instance.context.denied = false;
+    await instance.click('activity-microphone-retry');
+    assert.equal(instance.element('activity-microphone-retry').hidden, true);
+    assert.equal(instance.run('calibrationSession'), null);
+});
+
+test('a missing short-prompt speech callback does not keep iPhone input blocked for eight seconds', async () => {
+    const instance = app({ ios: true, fullApp: true });
+    instance.element('settings-modal').style.display = 'none';
+    instance.element('voice-toggle').checked = true;
+    instance.run('handleBubbleBlow = () => { rewards++; }; startBubbleActivity()');
+    await instance.flush();
+    assert.equal(instance.run('isPoofSpeaking()'), true);
+    instance.tick(3400); await instance.flush();
+    assert.equal(instance.run('isPoofSpeaking()'), false);
+    instance.context.level = 'blow'; instance.tick(1000);
+    assert.equal(instance.context.rewards, 1);
+});
+
+test('a microphone check is available before calibration and excludes device identifiers and audio', async () => {
+    const instance = app({ ios: true });
+    await instance.click('enable-microphone'); instance.tick(500);
+    await instance.click('copy-microphone-check');
+    const text = instance.element('microphone-check-text').textContent;
+    const report = JSON.parse(text);
+    assert.equal(report.startingMode, 'automatic');
+    assert.ok(Number.isFinite(report.recentInput.volume));
+    assert.ok(report.detectionSettings.releaseVolume > report.detectionSettings.noise);
+    assert.equal(report.trackState, 'live');
+    assert.doesNotMatch(text, /private-device|private-group|deviceId|groupId/);
+    assert.equal(instance.element('microphone-check-text').hidden, false);
 });

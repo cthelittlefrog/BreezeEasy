@@ -24,7 +24,7 @@
 
 /* Warm, quiet scenery gives cyan Poof and the red car clear contrast. */
 #racecar-world {
-    background: #f7e6bc url("../images/racecar/racecar-sky-mobile-v5.png") center / cover no-repeat;
+    background: #f7e6bc url("../images/racecar/racecar-sky-mobile-v5.webp") center / cover no-repeat;
 }
 
 #activity-screen:has(#racecar-world) #blow-meter {
@@ -47,5 +47,5 @@
 
 /* A separate wide scene keeps the sky-island artwork proportional on landscape displays. */
 @media (min-aspect-ratio: 1/1) {
-    #racecar-world { background-image: url("../images/racecar/racecar-sky-wide-v5.png"); }
+    #racecar-world { background-image: url("../images/racecar/racecar-sky-wide-v5.webp"); }
 }

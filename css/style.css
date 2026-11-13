@@ -747,8 +747,8 @@ body {
 
     transform: translateX(-50%);
 
-    /* Crop the transparent side margins in the supplied road artwork. */
-    background: url("../images/racecar/racecar-road.png") center var(--road-offset) / 120% auto repeat-y;
+    /* The scene stylesheet supplies the current road and markings. */
+    background: #8a96a7;
     overflow: hidden;
 }
 
@@ -797,7 +797,7 @@ body {
     position: absolute;
     inset: 0;
     z-index: 2;
-    background: url("../images/racecar/racecar-body.png") center / contain no-repeat;
+    background: url("../images/racecar/racecar-body.webp") center / contain no-repeat;
 }
 
 .racecar-tire {
@@ -806,7 +806,7 @@ body {
     width: 22px;
     height: 52px;
     /* Frame PNGs include transparent padding around the tire. */
-    background: url("../images/racecar/racecar-wheel-1.png") center / 205% 113% no-repeat;
+    background: url("../images/racecar/racecar-wheel-1.webp") center / 205% 113% no-repeat;
 }
 
 .tire-front-left { top: 30px; left: 8px; }
@@ -814,8 +814,8 @@ body {
 .tire-back-left { bottom: 28px; left: 8px; }
 .tire-back-right { bottom: 28px; right: 8px; }
 
-.tire-frame-1 { background-image: url("../images/racecar/racecar-wheel-1.png"); }
-.tire-frame-2 { background-image: url("../images/racecar/racecar-wheel-2.png"); }
+.tire-frame-1 { background-image: url("../images/racecar/racecar-wheel-1.webp"); }
+.tire-frame-2 { background-image: url("../images/racecar/racecar-wheel-2.webp"); }
 
 /* =====================================================
    RACECAR MOTION EFFECTS
@@ -1428,7 +1428,7 @@ body {
 
 /* The race uses its own overhead meadow rather than the shared mountain scene. */
 #racecar-world {
-    background: #a7f3ad url("../images/racecar/racecar-background.png") center / 100% 100% no-repeat;
+    background: #fff1db;
 }
 
 /* A pale halo follows the complete animated Poof silhouette in every activity. */
@@ -1450,3 +1450,23 @@ body {
 }
 #preview-poof-voice:disabled { opacity: 0.5; cursor: default; }
 #preview-poof-voice:focus-visible { outline: 3px solid #3b88aa; outline-offset: 3px; }
+
+/* A stopped microphone can be reconnected directly from an activity tap. */
+#activity-microphone-retry {
+    position: fixed;
+    top: max(76px, calc(env(safe-area-inset-top) + 64px));
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1000;
+    min-height: 44px;
+    max-width: 55vw;
+    padding: 0.6rem 0.9rem;
+    border: 2px solid #a9cfdf;
+    border-radius: 18px;
+    background: #fffaf0;
+    color: #294f69;
+    font: inherit;
+    font-weight: bold;
+}
+#activity-microphone-retry[hidden] { display: none; }
+#microphone-check-text { max-width: 100%; overflow: auto; font-size: 0.75rem; }

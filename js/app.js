@@ -121,7 +121,9 @@ function speakMessage(message) {
     if (!voiceToggle || !voiceToggle.checked) return;                       // Stops voice if setting is off
     if (!window.speechSynthesis) return;                                    // Stops if browser does not support speech
 
-    const finishSpeech = pauseForPoofSpeech();
+    // Short prompts should not suppress input for eight seconds if Safari loses
+    // the speech completion event. Normal onend still restores input immediately.
+    const finishSpeech = pauseForPoofSpeech(Math.max(3000, Math.min(8000, message.length * 65 + 1500)));
 
     const speech = new SpeechSynthesisUtterance(message);                   // Creates spoken message
 
@@ -155,6 +157,7 @@ function showScreen(screenToShow) {
     celebrationScreen.classList.remove("active-screen");                   // Hides celebration
 
     screenToShow.classList.add("active-screen");                           // Shows selected screen
+    if (typeof updateMicrophoneStatus === "function") updateMicrophoneStatus();
 }
 
 function resetMeter() {
@@ -816,6 +819,7 @@ function openSettings() {
     activeBlowDetector.reset();
     settingsModal.style.display = "flex";
     syncBalloonPause();
+    if (typeof updateMicrophoneStatus === "function") updateMicrophoneStatus();
     closeSettingsButton.focus();
 }
 
@@ -825,6 +829,7 @@ function closeSettings() {
     cancelCalibration();
     settingsModal.style.display = "none";
     syncBalloonPause();
+    if (typeof updateMicrophoneStatus === "function") updateMicrophoneStatus();
     settingsPreviousFocus?.focus();
 }
 
@@ -916,9 +921,9 @@ function startDragonActivity() {
         <div id="dragon-world">
             <div id="dragon-cave-backdrop" aria-hidden="true"></div>
             <div id="dragon-cave-light" aria-hidden="true"></div>
-            <div id="dragon-crystal"><img src="images/dragon/golden-gem-poof-v4.png" alt="Magic crystal"></div>
+            <div id="dragon-crystal"><img src="images/dragon/golden-gem-poof-v4.webp" alt="Magic crystal"></div>
             <div id="dragon-breath-trail" aria-hidden="true"></div>
-            <div id="dragon-snout"><img src="images/dragon/purple-head-v3.png" alt="Your purple dragon head viewed from above"></div>
+            <div id="dragon-snout"><img src="images/dragon/purple-head-v3.webp" alt="Your purple dragon head viewed from above"></div>
             <div class="dragon-lit-message" id="dragon-lit-message" role="status" hidden></div>
         </div>`;
     speakActivityInstruction("Blow gently to light the crystal!", "dragon");

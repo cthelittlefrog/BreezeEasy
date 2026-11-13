@@ -1,5 +1,5 @@
 /* Pure calibration/detection functions, also exercised by Node tests. */
-const BLOW_DEFAULTS = Object.freeze({ noise: 5, volume: 35, ratio: 0.45, sensitivity: 50 });
+const BLOW_DEFAULTS = Object.freeze({ noise: 5, volume: 7.5, ratio: 0.03, sensitivity: 50 });
 
 function percentile(values, fraction) {
     const sorted = [...values].sort((a, b) => a - b);
@@ -52,8 +52,12 @@ function buildBlowProfile(quiet, blows) {
 
 function adjustedBlowSettings(profile) {
     const factor = 1.5 - profile.sensitivity / 100;
+    const volume = Math.max(profile.noise + 1, profile.noise + (profile.volume - profile.noise) * factor);
     return {
-        volume: Math.max(profile.noise + 1, profile.noise + (profile.volume - profile.noise) * factor),
+        volume,
+        noise: profile.noise,
+        // Release must stay ABOVE the measured room noise, even at high sensitivity.
+        releaseVolume: profile.noise + (volume - profile.noise) * 0.65,
         ratio: profile.ratio * factor,
         duration: 220,
         release: 180,
@@ -87,7 +91,7 @@ function createBlowDetector() {
             const matches = sample.volume > settings.volume && sample.ratio >= settings.ratio;
             if (!matches) {
                 start = null;
-                if (sample.volume < settings.volume * 0.85) {
+                if (sample.volume < (settings.releaseVolume ?? settings.volume * 0.85)) {
                     released ??= now;
                     if (now - released >= settings.release) armed = true;
                 } else released = null;
@@ -104,6 +108,31 @@ function createBlowDetector() {
             lastTrigger = now;
             start = null;
             return true;
+        }
+    };
+}
+
+/* A brief startup window establishes the current room floor. After that, only
+   quiet samples may lower it: a blow must not raise its own threshold.
+   Explicitly calibrated profiles stay untouched. */
+function createQuietNoiseTracker() {
+    const quiet = [];
+    let noise = BLOW_DEFAULTS.noise;
+    let initialized = false;
+    return {
+        reset() { quiet.length = 0; noise = BLOW_DEFAULTS.noise; initialized = false; },
+        observe(sample, triggerVolume) {
+            if (!Number.isFinite(sample.volume) || sample.volume < 0 || (initialized && sample.volume >= triggerVolume)) return;
+            quiet.push(sample.volume);
+            if (quiet.length > 64) quiet.shift();
+            if (quiet.length >= 6) {
+                const floor = Math.max(0.5, Math.min(249, percentile(quiet, 0.8)));
+                noise = initialized ? Math.min(noise, floor) : floor;
+                initialized = true;
+            }
+        },
+        profile(sensitivity) {
+            return { ...BLOW_DEFAULTS, sensitivity, noise, volume: noise + 2.5 };
         }
     };
 }

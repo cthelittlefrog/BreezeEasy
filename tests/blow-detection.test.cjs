@@ -43,6 +43,53 @@ test('higher sensitivity makes gentle blows easier', () => {
     assert.ok(high.ratio < low.ratio);
     assert.ok(high.volume > profile.noise);
 });
+
+test('high sensitivity can rearm above the calibrated room floor after every breath', () => {
+    const detector = createBlowDetector();
+    const tuned = adjustedBlowSettings({ noise: 15, volume: 19, ratio: 0.1, sensitivity: 100 });
+    assert.ok(tuned.releaseVolume > 15 && tuned.releaseVolume < tuned.volume);
+    const run = (from, to, volume, ratio) => {
+        let hits = 0;
+        for (let now = from; now < to; now += 1000 / 60) {
+            if (detector.process({ volume, ratio }, now, tuned)) hits++;
+        }
+        return hits;
+    };
+    assert.equal(run(0, 1000, 24, 0.3), 1);
+    assert.equal(run(1000, 1500, 15, 0.01), 0);
+    assert.equal(run(1500, 2500, 24, 0.3), 1);
+    assert.equal(run(2500, 3000, 15, 0.01), 0);
+    assert.equal(run(3000, 4000, 24, 0.3), 1);
+});
+
+test('automatic starting settings learn quiet input without learning a blow as noise', () => {
+    const room = context.createQuietNoiseTracker();
+    for (let i = 0; i < 64; i++) {
+        const settings = adjustedBlowSettings(room.profile(50));
+        room.observe({ volume: 3, ratio: 0.02 }, settings.volume);
+    }
+    assert.equal(room.profile(50).noise, 3);
+    const settings = adjustedBlowSettings(room.profile(50));
+    for (let i = 0; i < 240; i++) room.observe({ volume: 18, ratio: 0.15 }, settings.volume);
+    assert.equal(room.profile(50).noise, 3);
+    room.reset();
+    assert.equal(room.profile(50).noise, 5);
+});
+
+test('automatic startup learns a louder room before ambient sound can count as a blow', () => {
+    const room = context.createQuietNoiseTracker(), detector = createBlowDetector();
+    let hits = 0;
+    for (let now = 0; now < 2000; now += 1000 / 60) {
+        room.observe({ volume: 15, ratio: 0.3 }, adjustedBlowSettings(room.profile(50)).volume);
+        if (detector.process({ volume: 15, ratio: 0.3 }, now, adjustedBlowSettings(room.profile(50)))) hits++;
+    }
+    assert.equal(hits, 0);
+    assert.equal(room.profile(50).noise, 15);
+    for (let now = 2000; now < 2500; now += 1000 / 60) {
+        if (detector.process({ volume: 22, ratio: 0.3 }, now, adjustedBlowSettings(room.profile(50)))) hits++;
+    }
+    assert.equal(hits, 1);
+});
 test('one long blow triggers once until released', () => {
     const detector = createBlowDetector();
     assert.equal(feed(detector, 0, 4000, 20), 1);

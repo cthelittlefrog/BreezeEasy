@@ -7,7 +7,7 @@
     container-type: size;
     overflow: hidden;
     --charge: 0;
-    --dragon-cave-image: url("../images/dragon/cave-mobile-poof-v4.png");
+    --dragon-cave-image: url("../images/dragon/cave-mobile-poof-v4.webp");
     background: #061e28;
 }
 
@@ -220,5 +220,5 @@
 
 /* Portrait artwork is the default. Use the wide composition for landscape. */
 @media (min-aspect-ratio: 1/1) {
-    #dragon-world { --dragon-cave-image: url("../images/dragon/cave-wide-poof-v4.png"); }
+    #dragon-world { --dragon-cave-image: url("../images/dragon/cave-wide-poof-v4.webp"); }
 }

@@ -8,22 +8,30 @@ let microphoneAnimationId;
 let microphoneGeneration = 0;
 let microphoneLastFailure = null;
 let microphoneStatus = "Tap an activity or Enable microphone to begin.";
+let lastMicrophoneSample = null;
 let activeBlowDetector = createBlowDetector();
 
 let poofSpeechActive = false;
+let poofSpeechRecovering = false;
 let poofSpeechRequest = 0;
 let poofSpeechTimer;
 
 function isPoofSpeaking() { return poofSpeechActive; }
 
+function isAppleTouchDevice() {
+    return /iPhone|iPad|iPod/i.test(navigator.userAgent || "") ||
+        (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+}
+
 function cancelPoofSpeech() {
     poofSpeechRequest++;
     poofSpeechActive = false;
+    poofSpeechRecovering = false;
     clearTimeout(poofSpeechTimer);
     window.speechSynthesis?.cancel();
 }
 
-function pauseForPoofSpeech() {
+function pauseForPoofSpeech(timeout = 8000) {
     cancelPoofSpeech();
     poofSpeechActive = true;
     const request = poofSpeechRequest;
@@ -32,20 +40,35 @@ function pauseForPoofSpeech() {
         cancelPoofSpeech();
         // Speech can interrupt the phone's input audio session. Resume it after
         // speech ends, errors, or times out; never let browser queue flags lock play.
-        if (microphoneStream && !document.hidden && !calibrationSession) startMicrophone({ preserveLatch: true });
+        if (microphoneStream && !document.hidden && !calibrationSession) {
+            const recovery = poofSpeechRequest;
+            poofSpeechRecovering = true;
+            // On iOS, TTS can leave a live input track permanently silent.
+            // A fresh capture restores input; keep the one-breath latch intact.
+            startMicrophone({ restart: isAppleTouchDevice(), preserveLatch: true }).finally(() => {
+                if (recovery !== poofSpeechRequest) return;
+                poofSpeechRecovering = false;
+                updateMicrophoneStatus();
+            });
+        }
     };
-    poofSpeechTimer = setTimeout(finish, 8000);
+    poofSpeechTimer = setTimeout(finish, Math.max(1500, Math.min(8000, timeout)));
     return finish;
 }
 
 async function startMicrophone({ restart = false, preserveLatch = false } = {}) {
     if (microphoneStartPromise) return microphoneStartPromise;
+    microphoneStatus = "Getting microphone ready…";
     const pending = connectMicrophone(restart, preserveLatch);
     microphoneStartPromise = pending;
+    updateMicrophoneStatus();
     try {
         return await pending;
     } finally {
-        if (microphoneStartPromise === pending) microphoneStartPromise = null;
+        if (microphoneStartPromise === pending) {
+            microphoneStartPromise = null;
+            updateMicrophoneStatus();
+        }
     }
 }
 
@@ -63,7 +86,7 @@ async function microphoneStep(promise, timeout, message) {
 
 function reportMicrophoneInterruption(message) {
     microphoneStatus = message;
-    if (isPoofSpeaking()) activeBlowDetector.pause();
+    if (isPoofSpeaking() || poofSpeechRecovering) activeBlowDetector.pause();
     else activeBlowDetector.reset();
     if (calibrationSession && !["finished", "error"].includes(calibrationSession.phase)) {
         calibrationError(message);
@@ -84,6 +107,7 @@ function releaseMicrophone() {
     analyser = null;
     microphone = null;
     microphoneStream = null;
+    lastMicrophoneSample = null;
     if (previousContext && previousContext.state !== "closed") {
         previousContext.close().catch(() => {});
     }
@@ -99,7 +123,9 @@ async function connectMicrophone(restart, preserveLatch) {
         }
         const healthyTrack = microphoneStream?.getAudioTracks().some(track =>
             track.readyState === "live" && track.enabled !== false && !track.muted);
-        const rebuild = restart || !healthyTrack || !audioContext || audioContext.state === "closed";
+        const rebuild = restart || !healthyTrack || !audioContext || audioContext.state === "closed" ||
+            audioContext.state === "interrupted" ||
+            (isAppleTouchDevice() && audioContext.state !== "running");
         if (rebuild) releaseMicrophone();
         generation = microphoneGeneration;
         const current = () => generation === microphoneGeneration;
@@ -154,6 +180,7 @@ async function connectMicrophone(restart, preserveLatch) {
         const activeTrack = microphoneStream.getAudioTracks()[0];
         if (activeTrack.muted || activeTrack.enabled === false) throw new Error("Microphone is muted. Tap Try Again to reconnect.");
         microphoneStatus = "Microphone ready.";
+        if (rebuild && !preserveLatch && typeof automaticRoomNoise !== "undefined") automaticRoomNoise.reset();
         if (rebuild && !preserveLatch) activeBlowDetector.reset();
         else activeBlowDetector.pause(); // Preserve the one-breath latch after speech.
         if (!microphoneAnimationId) monitorMicrophone();
@@ -178,6 +205,16 @@ async function connectMicrophone(restart, preserveLatch) {
 function updateMicrophoneStatus() {
     const status = document.getElementById("microphone-status");
     if (status) status.textContent = microphoneStatus;
+    const retry = document.getElementById("activity-microphone-retry");
+    if (retry) {
+        const playing = typeof currentActivity !== "undefined" && ["bubbles", "racecar", "dragon", "balloon"].includes(currentActivity);
+        const inSettings = document.getElementById("settings-modal")?.style.display === "flex" || Boolean(calibrationSession);
+        const ready = audioContext?.state === "running" && microphoneStream?.getAudioTracks().some(track =>
+            track.readyState === "live" && track.enabled !== false && !track.muted);
+        retry.hidden = !playing || inSettings || (Boolean(ready) && !poofSpeechRecovering) || poofSpeechActive;
+        retry.disabled = Boolean(microphoneStartPromise) || poofSpeechRecovering;
+        retry.textContent = microphoneStartPromise || poofSpeechRecovering ? "Getting ready…" : "Enable blowing";
+    }
 }
 
 function monitorMicrophone() {
@@ -189,7 +226,7 @@ function monitorMicrophone() {
         microphoneAnimationId = requestAnimationFrame(detect);
         if (document.hidden || audioContext.state !== "running" ||
             !microphoneStream.getAudioTracks().some(track => track.readyState === "live" && track.enabled !== false && !track.muted)) {
-            if (isPoofSpeaking()) activeBlowDetector.pause();
+            if (isPoofSpeaking() || poofSpeechRecovering) activeBlowDetector.pause();
             else activeBlowDetector.reset();
             return;
         }
@@ -206,11 +243,17 @@ function monitorMicrophone() {
             waveformRms = Math.sqrt(waveform.reduce((sum, value) => sum + value * value, 0) / waveform.length);
         }
         const sample = { volume: (low + high) / data.length, ratio: high / Math.max(low, 1), waveformRms };
+        lastMicrophoneSample = { ...sample, time: now };
         updateCalibration(sample, now);
         const inSettings = document.getElementById("settings-modal").style.display === "flex";
         const speaking = isPoofSpeaking();
         const playing = Boolean(currentActivity) && !inSettings;
-        if (speaking) {
+        if (speaking || poofSpeechRecovering) {
+            // Quiet input during the introduction can establish the room floor.
+            // Never learn the spoken prompt itself or a recovering input stream.
+            if (speaking && !poofSpeechRecovering && !calibrationSession && sample.volume < getBlowSettings().volume) {
+                updateAutomaticRoomNoise(sample);
+            }
             // Keep the release latch: speech after a reward must not rearm a long breath.
             activeBlowDetector.pause();
             return;
@@ -219,6 +262,7 @@ function monitorMicrophone() {
             activeBlowDetector.reset();
             return;
         }
+        updateAutomaticRoomNoise(sample);
         if (activeBlowDetector.process(sample, now, getBlowSettings())) {
             if (inSettings) showTestBlow();
             else handleBlow(sample.volume);
@@ -230,6 +274,12 @@ function monitorMicrophone() {
 document.addEventListener("visibilitychange", () => {
     activeBlowDetector.reset();
     if (document.hidden) cancelCalibration();
+    else updateMicrophoneStatus();
+});
+
+document.getElementById("activity-microphone-retry")?.addEventListener("click", () => {
+    cancelPoofSpeech();
+    return startMicrophone({ restart: true });
 });
 
 function getMicrophoneDiagnostics() {
@@ -242,7 +292,16 @@ function getMicrophoneDiagnostics() {
         reported: Object.fromEntries(fields.map(key => [key, actual[key] ?? "not reported"])),
         captureGeneration: microphoneGeneration,
         lastFailure: microphoneLastFailure,
+        startingMode: hasBlowCalibration ? "calibrated" : "automatic",
+        detectionSettings: getBlowSettings(),
+        recentInput: lastMicrophoneSample ? {
+            volume: Number(lastMicrophoneSample.volume.toFixed(3)),
+            frequencyRatio: Number(lastMicrophoneSample.ratio.toFixed(5)),
+            waveformRms: lastMicrophoneSample.waveformRms,
+            sampleAgeMs: Math.max(0, Math.round(performance.now() - lastMicrophoneSample.time))
+        } : null,
         poofSpeechActive,
+        poofSpeechRecovering,
         browserSpeechSpeaking: Boolean(window.speechSynthesis?.speaking),
         browserSpeechPending: Boolean(window.speechSynthesis?.pending),
         trackState: track?.readyState ?? "not started",

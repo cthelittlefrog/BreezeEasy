@@ -1,6 +1,8 @@
 /* Calibration stays on this browser/device. No recording or network upload. */
 const BLOW_STORAGE_KEY = "breezeEasy.blowProfile.v1";
 let blowProfile = { ...BLOW_DEFAULTS };
+let hasBlowCalibration = false;
+const automaticRoomNoise = createQuietNoiseTracker();
 let calibrationSession = null;
 let calibrationRequest = 0;
 let testBlowCount = 0;
@@ -19,11 +21,16 @@ const calibrationCountdown = document.getElementById("calibration-countdown");
 const sensitivitySlider = document.getElementById("blow-sensitivity");
 const sensitivityValue = document.getElementById("sensitivity-value");
 
+calibrationStatus.textContent = "Automatic starting settings ready.";
 try {
     const saved = JSON.parse(localStorage.getItem(BLOW_STORAGE_KEY));
     if (validBlowProfile(saved)) {
-        blowProfile = saved;
-        calibrationStatus.textContent = "Blowing calibrated.";
+        // Older versions saved Restore Defaults and a sensitivity change as if
+        // they were a calibration. Migrate those restrictive factory values.
+        const legacyDefaults = saved.noise === 5 && saved.volume === 35 && saved.ratio === 0.45;
+        hasBlowCalibration = saved.calibrated !== false && !legacyDefaults;
+        blowProfile = hasBlowCalibration ? saved : { ...BLOW_DEFAULTS, sensitivity: saved.sensitivity };
+        calibrationStatus.textContent = hasBlowCalibration ? "Blowing calibrated." : "Automatic starting settings ready.";
     }
 } catch {
     // Missing, blocked, or damaged storage must never prevent play.
@@ -31,7 +38,11 @@ try {
 refreshSensitivity();
 
 function getBlowSettings() {
-    return adjustedBlowSettings(blowProfile);
+    return adjustedBlowSettings(hasBlowCalibration ? blowProfile : automaticRoomNoise.profile(blowProfile.sensitivity));
+}
+
+function updateAutomaticRoomNoise(sample) {
+    if (!hasBlowCalibration) automaticRoomNoise.observe(sample, getBlowSettings().volume);
 }
 
 function refreshSensitivity() {
@@ -41,7 +52,7 @@ function refreshSensitivity() {
 
 function saveBlowProfile() {
     try {
-        localStorage.setItem(BLOW_STORAGE_KEY, JSON.stringify({ ...blowProfile, version: 1 }));
+        localStorage.setItem(BLOW_STORAGE_KEY, JSON.stringify({ ...blowProfile, version: 1, calibrated: hasBlowCalibration }));
         return true;
     } catch {
         return false;
@@ -204,6 +215,7 @@ function updateCalibration(sample, now) {
         const nextProfile = buildBlowProfile(session.quiet, session.blows);
         if (!validBlowProfile(nextProfile)) throw new Error("No usable blowing sample. Try again.");
         blowProfile = nextProfile;
+        hasBlowCalibration = true;
         refreshSensitivity();
         const saved = saveBlowProfile();
         showCalibrationDiagnostics("Calibration succeeded");
@@ -241,6 +253,8 @@ sensitivitySlider.addEventListener("change", () => {
 });
 document.getElementById("reset-calibration").addEventListener("click", () => {
     blowProfile = { ...BLOW_DEFAULTS };
+    hasBlowCalibration = false;
+    automaticRoomNoise.reset();
     refreshSensitivity();
     activeBlowDetector.reset();
     calibrationStatus.textContent = saveBlowProfile()
@@ -256,5 +270,20 @@ document.getElementById("copy-calibration-diagnostics").addEventListener("click"
         status.textContent = "Copied.";
     } catch {
         status.textContent = "Select and copy the details above, or take a screenshot.";
+    }
+});
+
+// This works before calibration too, so a failing first use can be inspected.
+document.getElementById("copy-microphone-check").addEventListener("click", async () => {
+    const report = JSON.stringify(getMicrophoneDiagnostics(), null, 2);
+    const text = document.getElementById("microphone-check-text");
+    text.textContent = report;
+    try {
+        await navigator.clipboard.writeText(report);
+        text.hidden = true;
+        document.getElementById("microphone-copy-status").textContent = "Microphone check copied. No audio was recorded.";
+    } catch {
+        text.hidden = false;
+        document.getElementById("microphone-copy-status").textContent = "Select and copy the check below. No audio was recorded.";
     }
 });

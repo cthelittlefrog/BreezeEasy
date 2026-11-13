@@ -16,26 +16,26 @@ const animatedTails =
     document.querySelectorAll(".animated-tail");
 
 const leftEyeFrames = [
-    "images/poof/poof-left-eye-open.png",
-    "images/poof/poof-left-eye-half.png",
-    "images/poof/poof-left-eye-closed.png",
-    "images/poof/poof-left-eye-half.png",
-    "images/poof/poof-left-eye-open.png"
+    "images/poof/poof-left-eye-open.webp",
+    "images/poof/poof-left-eye-half.webp",
+    "images/poof/poof-left-eye-closed.webp",
+    "images/poof/poof-left-eye-half.webp",
+    "images/poof/poof-left-eye-open.webp"
 ];
 
 const rightEyeFrames = [
-    "images/poof/poof-right-eye-open.png",
-    "images/poof/poof-right-eye-half.png",
-    "images/poof/poof-right-eye-closed.png",
-    "images/poof/poof-right-eye-half.png",
-    "images/poof/poof-right-eye-open.png"
+    "images/poof/poof-right-eye-open.webp",
+    "images/poof/poof-right-eye-half.webp",
+    "images/poof/poof-right-eye-closed.webp",
+    "images/poof/poof-right-eye-half.webp",
+    "images/poof/poof-right-eye-open.webp"
 ];
 
 const tailFrames = [
-    "images/poof/poof-tail-1.png",
-    "images/poof/poof-tail-2.png",
-    "images/poof/poof-tail-3.png",
-    "images/poof/poof-tail-2.png"
+    "images/poof/poof-tail-1.webp",
+    "images/poof/poof-tail-2.webp",
+    "images/poof/poof-tail-3.webp",
+    "images/poof/poof-tail-2.webp"
 ];
 
 let tailIndex = 0;
