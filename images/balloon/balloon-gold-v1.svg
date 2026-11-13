@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 300" fill="none">
+  <defs>
+    <radialGradient id="gold" cx="0" cy="0" r="1" gradientTransform="translate(78 76) rotate(58) scale(225 185)" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#fff3a6"/>
+      <stop offset=".45" stop-color="#ffdb5c"/>
+      <stop offset="1" stop-color="#efa52c"/>
+    </radialGradient>
+  </defs>
+  <path d="M120 17C57 17 22 61 22 124c0 63 41 113 81 142 11 9 23 9 34 0 40-29 81-79 81-142 0-63-35-107-98-107Z" fill="url(#gold)" stroke="#14294f" stroke-width="7" stroke-linejoin="round"/>
+  <path d="m111 274-9 22c12-5 24-5 36 0l-9-22" fill="#ffc84c" stroke="#14294f" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M63 72c-17 15-23 34-21 52 1 7 8 9 12 3 5-8 5-22 14-34 7-10 4-24-5-21Z" fill="#fffef0" fill-opacity=".92"/>
+  <ellipse cx="83" cy="51" rx="12" ry="7" transform="rotate(-24 83 51)" fill="#fffef0" fill-opacity=".85"/>
+  <path d="M187 158c-7 33-26 61-45 79" stroke="#ffeaa0" stroke-width="10" stroke-linecap="round" opacity=".6"/>
+</svg>

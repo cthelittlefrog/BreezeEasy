@@ -1435,3 +1435,18 @@ body {
 #activity-poof .poof-character {
     filter: drop-shadow(0 0 3px #fffef5) drop-shadow(0 0 9px #fff9eddd);
 }
+
+/* Voice preview belongs in the parent settings, alongside the Voice toggle. */
+#preview-poof-voice {
+    min-height: 44px;
+    padding: 0.65rem 1rem;
+    border: 2px solid #b5d8e7;
+    border-radius: 16px;
+    background: #fffaf0;
+    color: #294f69;
+    font: inherit;
+    font-weight: bold;
+    cursor: pointer;
+}
+#preview-poof-voice:disabled { opacity: 0.5; cursor: default; }
+#preview-poof-voice:focus-visible { outline: 3px solid #3b88aa; outline-offset: 3px; }

@@ -65,7 +65,7 @@ const blowingReminder = createBlowingReminder({
 });
 function updateBlowingHelp(now) {
     const playing = activityScreen.classList.contains("active-screen") &&
-        (currentActivity === "bubbles" || currentActivity === "dragon" ||
+        (currentActivity === "bubbles" || currentActivity === "dragon" || currentActivity === "balloon" ||
             (currentActivity === "racecar" && ["racing", "finishing"].includes(racecarPhase)));
     const speaking = isPoofSpeaking();
     blowingReminder.update(now, playing && !document.hidden && !speaking &&
@@ -125,8 +125,11 @@ function speakMessage(message) {
 
     const speech = new SpeechSynthesisUtterance(message);                   // Creates spoken message
 
-    speech.rate = 0.9;                                                      // Toddler-friendly pace
-    speech.pitch = 1.4;                                                     // Softer playful voice
+    const voice = choosePoofVoice();
+    if (voice) speech.voice = voice;
+    speech.lang = voice?.lang || "en-US";
+    speech.rate = 0.94;                                                     // Clear, friendly pace
+    speech.pitch = 1.65;                                                    // Brighter, higher-pitched Poof
     speech.volume = 0.8;                                                    // Comfortable volume
 
     speech.onend = finishSpeech;
@@ -144,6 +147,7 @@ function showScreen(screenToShow) {
     activityScreenSession++;
     stopCelebrationSparkles();
     stopDragonActivity();
+    stopBalloonActivity();
     activeBlowDetector.reset();
     blowingReminder.reset();
     menuScreen.classList.remove("active-screen");                          // Hides menu
@@ -602,6 +606,11 @@ function handleBlow(blowStrength = 45) {
         return;
     }
 
+    if (currentActivity === "balloon") {
+        handleBalloonBlow(blowStrength);
+        return;
+    }
+
     if (currentActivity === "dragon") {
         handleDragonBlow(blowStrength);
         return;
@@ -745,6 +754,10 @@ activityCards.forEach(card => {
             startBubbleActivity();                                                 // Starts bubbles
         }
 
+        if (activityName === "balloon") {
+            startBalloonActivity();
+        }
+
         if (activityName === "dragon") {
             startDragonActivity();
         }
@@ -802,6 +815,7 @@ function openSettings() {
     cancelPoofSpeech();
     activeBlowDetector.reset();
     settingsModal.style.display = "flex";
+    syncBalloonPause();
     closeSettingsButton.focus();
 }
 
@@ -810,6 +824,7 @@ function closeSettings() {
     blowingReminder.reset();
     cancelCalibration();
     settingsModal.style.display = "none";
+    syncBalloonPause();
     settingsPreviousFocus?.focus();
 }
 
@@ -829,6 +844,7 @@ settingsTrigger.addEventListener("pointerdown", event => {
 });
 window.addEventListener("blur", cancelSettingsHold);
 document.addEventListener("visibilitychange", () => {
+    syncBalloonPause();
     cancelSettingsHold();
     blowingReminder.reset();
 });
@@ -1006,4 +1022,188 @@ function createDragonCrystalSparkles() {
         trail.appendChild(star);
         dragonLater(() => star.remove(), 2300);
     }
+}
+
+/* =====================================================
+   BALLOON — INFLATE, RELEASE, AND FLOAT AWAY
+   ===================================================== */
+let balloonSession = 0;
+let balloonAnimationId = null;
+let balloonLastFrame = null;
+let balloonStageElapsed = 0;
+
+function stopBalloonActivity() {
+    balloonSession++;
+    if (balloonAnimationId !== null) cancelAnimationFrame(balloonAnimationId);
+    balloonAnimationId = null;
+    balloonLastFrame = null;
+    balloonStageElapsed = 0;
+}
+
+function startBalloonActivity() {
+    showScreen(activityScreen);
+    currentActivity = "balloon";
+    requiredBlows = 5;
+    resetMeter();
+    activityArea.innerHTML = `
+        <div id="balloon-world">
+            <div id="balloon-ground-shadow" aria-hidden="true"></div>
+            <div id="balloon-rig">
+                <div id="balloon-inflation"><img src="images/balloon/balloon-gold-v1.svg" alt="A golden balloon ready to blow up"></div>
+                <svg class="balloon-curly-string" viewBox="0 0 240 110" aria-hidden="true">
+                    <path d="M120 0c-26 15 30 22 4 39s-29 23-6 35 25 20 2 34"/>
+                </svg>
+            </div>
+            <div id="balloon-message" role="status" hidden></div>
+        </div>`;
+    const world = document.getElementById("balloon-world");
+    world.style.setProperty("--balloon-scale", 0.55);
+    renderBalloonFlight(world, 0);
+    queueBalloonFrame();
+    speakActivityInstruction("Blow gently to make the balloon bigger!", "balloon");
+}
+
+function handleBalloonBlow() {
+    if (currentActivity !== "balloon" || blowCount >= requiredBlows) return;
+    blowCount++;
+    updateMeter();
+    const world = document.getElementById("balloon-world");
+    if (!world) return;
+    world.style.setProperty("--balloon-scale", 0.55 + 0.45 * blowCount / requiredBlows);
+    if (blowCount === requiredBlows) {
+        currentActivity = "balloon-finishing";
+        balloonStageElapsed = 0;
+        blowingReminder.reset();
+    }
+}
+
+function syncBalloonPause() {
+    if (!["balloon", "balloon-finishing", "balloon-flying", "balloon-celebrating"].includes(currentActivity)) return false;
+    const paused = document.hidden || settingsModal.style.display === "flex" || Boolean(calibrationSession);
+    // Start a fresh time baseline after a pause so hidden time never advances a stage.
+    if (paused) balloonLastFrame = null;
+    return paused;
+}
+
+function queueBalloonFrame() {
+    const session = balloonSession;
+    balloonAnimationId = requestAnimationFrame(now => updateBalloonActivity(now, session));
+}
+
+function updateBalloonActivity(now, session) {
+    if (session !== balloonSession || !["balloon", "balloon-finishing", "balloon-flying", "balloon-celebrating"].includes(currentActivity)) return;
+    balloonAnimationId = null;
+    const world = document.getElementById("balloon-world");
+    if (!world) return;
+    const paused = syncBalloonPause();
+    const delta = balloonLastFrame === null ? 0 : Math.max(0, Math.min(now - balloonLastFrame, 100));
+    balloonLastFrame = paused ? null : now;
+    if (!paused) {
+        balloonStageElapsed += delta;
+        if (currentActivity === "balloon-flying") renderBalloonFlight(world, balloonStageElapsed);
+        if (currentActivity === "balloon-finishing" && balloonStageElapsed >= 750) {
+            // Let the final inflation settle before the balloon leaves the child.
+            currentActivity = "balloon-flying";
+            balloonStageElapsed = 0;
+            world.classList.add("is-released");
+            const message = document.getElementById("balloon-message");
+            message.textContent = "Up, up and away!";
+            message.hidden = false;
+            speakMessage("Up, up and away!");
+        } else if (currentActivity === "balloon-flying" && balloonStageElapsed >= 4800) {
+            currentActivity = "balloon-celebrating";
+            balloonStageElapsed = 0;
+            world.classList.add("is-finished");
+            const message = document.getElementById("balloon-message");
+            message.textContent = "Wonderful blowing!";
+            document.getElementById("activity-poof")?.classList.add("poof-center-celebration");
+            speakMessage("Wonderful blowing!");
+        } else if (currentActivity === "balloon-celebrating" && balloonStageElapsed >= 3000) {
+            cancelPoofSpeech();
+            currentActivity = null;
+            resetMeter();
+            showScreen(menuScreen);
+            return;
+        }
+    }
+    queueBalloonFrame();
+}
+
+// Smoothly join the existing flight waypoints without restarting an easing curve.
+// Monotone Hermite slopes keep height and size moving steadily in one direction.
+function sampleBalloonFlight(milliseconds) {
+    const times = [0, 0.22, 0.58, 1];
+    const t = Math.max(0, Math.min(milliseconds / 4800, 1));
+    const interpolate = values => {
+        const durations = times.slice(1).map((time, i) => time - times[i]);
+        const slopes = durations.map((duration, i) => (values[i + 1] - values[i]) / duration);
+        const tangents = [0]; // A gentle, stationary lift-off.
+        for (let i = 1; i < values.length - 1; i++) {
+            const before = slopes[i - 1], after = slopes[i];
+            const w1 = 2 * durations[i] + durations[i - 1];
+            const w2 = durations[i] + 2 * durations[i - 1];
+            tangents[i] = before * after <= 0 ? 0 : (w1 + w2) / (w1 / before + w2 / after);
+        }
+        tangents[3] = slopes[2];
+        const i = t < times[1] ? 0 : t < times[2] ? 1 : 2;
+        const u = (t - times[i]) / durations[i];
+        const u2 = u * u, u3 = u2 * u;
+        return (2 * u3 - 3 * u2 + 1) * values[i] +
+            (u3 - 2 * u2 + u) * durations[i] * tangents[i] +
+            (-2 * u3 + 3 * u2) * values[i + 1] +
+            (u3 - u2) * durations[i] * tangents[i + 1];
+    };
+    const fade = Math.max(0, Math.min((t - 0.84) / 0.16, 1));
+    return {
+        x: interpolate([0, -0.25, 1, 0.35]),
+        y: interpolate([0, -0.18, -0.6, -1.2]),
+        scale: interpolate([1, 0.9, 0.46, 0.08]),
+        opacity: 1 - fade * fade * (3 - 2 * fade)
+    };
+}
+
+function renderBalloonFlight(world, milliseconds) {
+    const flight = sampleBalloonFlight(milliseconds);
+    world.style.setProperty("--balloon-flight-x", flight.x);
+    world.style.setProperty("--balloon-flight-y", flight.y);
+    world.style.setProperty("--balloon-flight-scale", flight.scale);
+    world.style.setProperty("--balloon-flight-opacity", flight.opacity);
+}
+
+/* Choose an available friendly English voice rather than the device's default. */
+function choosePoofVoice() {
+    let voices;
+    try { voices = window.speechSynthesis?.getVoices?.() || []; }
+    catch { return null; }
+    const profiles = [
+        [/samantha/i, 140],
+        [/google.*us.*english|google.*english.*us/i, 130],
+        [/aria|jenny/i, 125],
+        [/shelley|karen|tessa|moira/i, 115],
+        [/female|zira|hazel/i, 100]
+    ];
+    const score = voice => {
+        const language = String(voice.lang || "").toLowerCase().replace(/_/g, "-");
+        const match = profiles.find(([pattern]) => pattern.test(voice.name || ""));
+        return (match ? match[1] : language === "en-us" ? 30 : 20) +
+            (voice.localService ? 1 : 0) + (voice.default ? 2 : 0);
+    };
+    return voices.filter(voice => /^en(?:[-_]|$)/i.test(voice.lang || ""))
+        .sort((a, b) => score(b) - score(a))[0] || null;
+}
+
+// Request the voice list early; browsers may populate it asynchronously.
+try { window.speechSynthesis?.getVoices?.(); } catch { /* Default speech still works. */ }
+
+const poofVoicePreview = document.getElementById("preview-poof-voice");
+if (poofVoicePreview) {
+    poofVoicePreview.disabled = !voiceToggle.checked;
+    poofVoicePreview.addEventListener("click", () => {
+        cancelPoofSpeech();
+        speakMessage("Hi! I'm Poof. Let's take a gentle breath together!");
+    });
+    voiceToggle.addEventListener("change", () => {
+        poofVoicePreview.disabled = !voiceToggle.checked;
+        if (!voiceToggle.checked) cancelPoofSpeech();
+    });
 }
