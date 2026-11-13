@@ -263,19 +263,14 @@ function loadRacecarActivity() {
             <div id="racecar-road">
                 <div id="racecar-finish-line"></div>
             
-                <div class="road-line road-line-one"></div>
-                <div class="road-line road-line-two"></div>
-                <div class="road-line road-line-three"></div>
-                <div class="road-line road-line-four"></div>
+
             </div>
 
             <div id="racecar">
                 <div class="racecar-tire tire-front-left"></div>
                 <div class="racecar-tire tire-front-right"></div>
 
-                <div id="racecar-body">
-                    <div id="racecar-window"></div>
-                </div>
+                <div id="racecar-body"></div>
 
                 <div class="racecar-tire tire-back-left"></div>
                 <div class="racecar-tire tire-back-right"></div>
@@ -500,18 +495,12 @@ function startRacecarMotion() {
 }
 
 function moveRoadLines() {
-    const roadLines = document.querySelectorAll(".road-line");             // Gets road stripes
+    const road = document.getElementById("racecar-road");
+    if (!road) return;
 
-    roadLines.forEach((line, index) => {
-        const baseTop = -10 + index * 30;                                  // Spaces lines evenly
-        const loopedOffset = raceRoadOffset % 120;                         // Loops road movement
-
-        line.style.top = `${baseTop + loopedOffset}%`;                     // Moves line downward
-
-        if (baseTop + loopedOffset > 105) {
-            line.style.top = `${baseTop + loopedOffset - 120}%`;           // Sends line back to top
-        }
-    });
+    // Offset uses the same percentage-of-road-height units as the finish line.
+    // Only the texture repeats; the finish line remains a single element.
+    road.style.setProperty("--road-offset", `${raceRoadOffset * road.clientHeight / 100}px`);
 
     const finishLine = document.getElementById("racecar-finish-line");          // Gets finish line
 
@@ -533,7 +522,7 @@ function showRacecarFinishLine() {
 function animateRacecarTires() {
     const tires = document.querySelectorAll(".racecar-tire");              // Gets all tires
 
-    racecarTireFrame = (racecarTireFrame + 1) % 3;                         // Cycles 0, 1, 2
+    racecarTireFrame = Math.floor(raceRoadOffset / 5) % 2;                // Two frames, paced by road travel
 
     tires.forEach(tire => {
         tire.classList.remove("tire-frame-1", "tire-frame-2", "tire-frame-3"); // Clears frames

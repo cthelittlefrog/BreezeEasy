@@ -1,0 +1,46 @@
+/* Racing scenery and contrast; loaded after the shared app stylesheet. */
+#racecar-road {
+    /* Only the markings repeat, so the road has no horizontal image seam. */
+    background: linear-gradient(90deg, #7c8799, #929eaf 50%, #7c8799);
+}
+
+#racecar-road::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    /* Rounded cream dashes repeat exactly and share the finish line's motion. */
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='88' viewBox='0 0 12 88'%3E%3Crect x='1' y='0' width='10' height='48' rx='5' fill='%23fff0c9'/%3E%3C/svg%3E") center var(--road-offset) / 12px 88px repeat-y;
+}
+
+#racecar-road::after {
+    content: "";
+    position: absolute;
+    inset: 0 5px;
+    pointer-events: none;
+    border-left: 5px solid #fff0c9;
+    border-right: 5px solid #fff0c9;
+}
+
+/* Warm, quiet scenery gives cyan Poof and the red car clear contrast. */
+#racecar-world {
+    background: #f7e6bc url("../images/racecar/racecar-scene-v4.png") center / 100% 100% no-repeat;
+}
+
+#activity-screen:has(#racecar-world) #blow-meter {
+    padding: 10px 8px;
+    border: 1px solid #d8c6ae;
+    border-radius: 999px;
+    background: #fffaf0e8;
+    box-shadow: 0 3px 10px #66554520;
+}
+
+#activity-screen:has(#racecar-world) .meter-dot {
+    border-color: #7b8799;
+    box-shadow: none;
+}
+
+#activity-screen:has(#racecar-world) .meter-dot.active {
+    background: #f2c35b;
+    border-color: #91703b;
+}
